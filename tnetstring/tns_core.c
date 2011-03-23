@@ -345,7 +345,7 @@ tns_parse_list(void *val, const char *data, size_t len)
         item = tns_parse(data, len, &remain);
         len = len - (remain - data);
         data = remain;
-        if(item == NULL || len < 0) {
+        if(item == NULL) {
             return -1;
         }
         if(tns_add_to_list(val,item) == -1) {
@@ -365,13 +365,13 @@ tns_parse_dict(void *val, const char *data, size_t len)
         key = tns_parse(data, len, &remain);
         len = len - (remain - data);
         data = remain;
-        if(key == NULL || len < 0) {
+        if(key == NULL) {
             return -1;
         }
         item = tns_parse(data, len, &remain);
         len = len - (remain - data);
         data = remain;
-        if(item == NULL || len < 0) {
+        if(item == NULL) {
             return -1;
         }
         if(tns_add_to_dict(val,key,item) == -1) {
