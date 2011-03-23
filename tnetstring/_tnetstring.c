@@ -360,29 +360,29 @@ tns_render_list(void *val, tns_outbuf *outbuf)
 }
 
 
-static inline char
+static inline tns_type_tag
 tns_get_type(void *val)
 {
   if(val == Py_True || val == Py_False) {
-    return '!';
+    return tns_bool_tag;
   }
   if(val == Py_None) {
-    return '~';
+    return tns_null_tag;
   }
   if(PyInt_Check((PyObject*)val) || PyLong_Check((PyObject*)val)) {
-    return '#';
+    return tns_number_tag;
   }
   if(PyFloat_Check((PyObject*)val)) {
-    return '#';
+    return tns_number_tag;
   }
   if(PyString_Check((PyObject*)val)) {
-    return ',';
+    return tns_string_tag;
   }
   if(PyList_Check((PyObject*)val)) {
-    return ']';
+    return tns_list_tag;
   }
   if(PyDict_Check((PyObject*)val)) {
-    return '}';
+    return tns_dict_tag;
   }
   return 0;
 }
