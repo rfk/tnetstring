@@ -394,15 +394,12 @@ tns_parse_dict(void *val, const char *data, size_t len)
 static inline int
 tns_outbuf_itoa(size_t n, tns_outbuf *outbuf)
 {
-  while(1) {
+  do {
       if(tns_outbuf_putc(outbuf, n%10+'0') == -1) {
           return -1;
       }
       n = n / 10;
-      if(n == 0) {
-          return 0;
-      }
-  }
+  } while(n > 0);
 }
 
 
