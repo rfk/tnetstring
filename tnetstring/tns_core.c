@@ -257,6 +257,11 @@ tns_render_value(void* val, char* output, size_t size, size_t* len)
   int res;
   int totallen;
 
+  //  We need at least enough space for length, colon and type tag.
+  if(size < 3) {
+      return 1;
+  }
+
   //  Find out the type tag for the given value.
   type = tns_get_type(val);
   if(type == 0) {
