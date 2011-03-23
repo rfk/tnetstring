@@ -20,6 +20,15 @@ typedef struct tns_outbuf_s {
   size_t alloc_size;
 } tns_outbuf;
 
+typedef enum tns_type_tag_e {
+    tns_string_tag = ',',
+    tns_number_tag = '#',
+    tns_bool_tag = '!',
+    tns_null_tag = '~',
+    tns_dict_tag = '}',
+    tns_list_tag = ']',
+} tns_type_tag;
+
 //  After #including this code, you must provide implementations for the
 //  following functions.  They provide the low-level data manipulation
 //  routines from which we can build a parser and renderer.
@@ -29,7 +38,7 @@ static void tns_parse_error(const char *errstr);
 static void tns_render_error(const char *errstr);
 
 //  Functions to introspect the type of a data object.
-static char tns_get_type(void *val);
+static tns_type_tag tns_get_type(void *val);
 
 //  Functions for parsing and rendering primitive datatypes.
 static void *tns_parse_string(const char *data, size_t len);
@@ -125,7 +134,7 @@ tns_parse(const char *data, size_t len, char **remain)
 {
   void *val;
   char *valstr;
-  char type;
+  tns_type_tag type;
   size_t vallen;
 
   //  Read the length of the value, and verify that is ends in a colon.
@@ -151,12 +160,12 @@ tns_parse(const char *data, size_t len, char **remain)
   //  Now dispatch type parsing based on the type tag.
   switch(type) {
     //  Primitive type: a string blob.
-    case ',':
+    case tns_string_tag:
         val = tns_parse_string(valstr, vallen);
         break;
     //  Primitive type: a number.
     //  I'm branching out here and allowing both floats and ints.
-    case '#':
+    case tns_number_tag:
         if(tns_str_is_float(valstr,vallen)) {
             val = tns_parse_float(valstr, vallen);
             if(val == NULL) {
@@ -171,7 +180,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Primitive type: a boolean.
     //  The only acceptable values are "true" and "false".
-    case '!':
+    case tns_bool_tag:
         if(vallen == 4 && strncmp(valstr,"true",4) == 0) {
             val = tns_get_true();
         } else if(vallen == 5 && strncmp(valstr,"false",5) == 0) {
@@ -183,7 +192,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Primitive type: a null.
     //  This must be a zero-length string.
-    case '~':
+    case tns_null_tag:
         if(vallen != 0) {
             tns_parse_error("not a tnetstring: invalid null literal");
             val = NULL;
@@ -193,7 +202,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Compound type: a dict.
     //  The data is written <key><value><key><value>
-    case '}':
+    case tns_dict_tag:
         val = tns_new_dict();
         if(tns_parse_dict(val,valstr,vallen) == -1) {
             tns_free_dict(val);
@@ -203,7 +212,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Compound type: a list.
     //  The data is written <item><item><item>
-    case ']':
+    case tns_list_tag:
         val = tns_new_list();
         if(tns_parse_list(val,valstr,vallen) == -1) {
             tns_free_list(val);
@@ -254,7 +263,7 @@ tns_render_reversed(void *val, size_t *len)
 static int
 tns_render_value(void *val, tns_outbuf *outbuf)
 {
-  char type;
+  tns_type_tag type;
   int res;
   size_t datalen;
 
@@ -270,22 +279,22 @@ tns_render_value(void *val, tns_outbuf *outbuf)
   //  Render it into the output buffer, leaving space for the
   //  type tag at the end.
   switch(type) {
-    case ',':
+    case tns_string_tag:
       res = tns_render_string(val, outbuf);
       break;
-    case '#':
+    case tns_number_tag:
       res = tns_render_number(val, outbuf);
       break;
-    case '!':
+    case tns_bool_tag:
       res = tns_render_bool(val, outbuf);
       break;
-    case '~':
+    case tns_null_tag:
       res = 0;
       break;
-    case '}':
+    case tns_dict_tag:
       res = tns_render_dict(val, outbuf);
       break;
-    case ']':
+    case tns_list_tag:
       res = tns_render_list(val, outbuf);
       break;
     default:
