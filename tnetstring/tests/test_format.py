@@ -24,7 +24,7 @@ FORMAT_EXAMPLES = {
 }
 
 
-def get_random_object(random=random,depth=0):
+def get_random_object(random=random,depth=0,jsonsafe=False):
     """Generate a random serializable object."""
     #  The probability of generating a scalar value
     #  increases as the depth increases, to ensure we bottom out.
@@ -32,13 +32,21 @@ def get_random_object(random=random,depth=0):
         what = random.randint(0,1)
         if what == 0:
             n = random.randint(0,10)
-            return list(get_random_object(random,depth+1) for _ in xrange(n))
+            l = []
+            for _ in xrange(n):
+                l.append(get_random_object(random,depth+1,jsonsafe))
+            return l
         if what == 1:
             n = random.randint(0,10)
             d = {}
             for _ in xrange(n):
-               k = get_random_object(random,10) # large depth == scalar value
-               d[k] = get_random_object(random,depth+1)
+               #  JSON only supports string keys.
+               if jsonsafe:
+                   n = random.randint(0,200)
+                   k = "".join(chr(random.randint(32,126)) for _ in xrange(n))
+               else:
+                   k = get_random_object(random,10,jsonsafe)
+               d[k] = get_random_object(random,depth+1,jsonsafe)
             return d
     else:
         what = random.randint(0,5)
@@ -50,10 +58,15 @@ def get_random_object(random=random,depth=0):
             return False
         if what == 3:
             return random.randint(0,sys.maxint)
-        if what == 4:
+        #  cjson can't reliably round-trip floats bytes.
+        if what == 4 and not jsonsafe:
             return random.randint(0,sys.maxint)*1.0/random.randint(0,sys.maxint)
         n = random.randint(0,200)
-        return "".join(chr(random.randint(0,255)) for _ in xrange(n))
+        #  cjson can't reliably round-trip non-printable bytes.
+        if jsonsafe:
+            return "".join(chr(random.randint(32,126)) for _ in xrange(n))
+        else:
+            return "".join(chr(random.randint(0,255)) for _ in xrange(n))
 
 
 
@@ -65,7 +78,7 @@ class Test_Format(unittest.TestCase):
             self.assertEqual(expect,tnetstring.loads(tnetstring.dumps(expect)))
 
     def test_roundtrip_format_random(self):
-        for _ in xrange(100):
+        for _ in xrange(500):
             v = get_random_object()
             self.assertEqual(v,tnetstring.loads(tnetstring.dumps(v)))
 
