@@ -23,6 +23,9 @@ And here's a list mixing integers and bools::
 
     19:5:12345#4:true!1:0#]
 
+Also, since the ``,`` type tag represents a string, every valid netstring is a
+valid typed netstring!
+
 Simple enough?  This module gives you the following functions:
 
     :dumps:   dump an object as a tnetstring to a string
