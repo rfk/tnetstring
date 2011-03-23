@@ -79,8 +79,8 @@ static PyObject*
 _tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds) 
 {
   PyObject *object, *string;
-  char* output, *odata, *sdata;
-  size_t len;
+  char *output, *odata, *sdata;
+  size_t len=0;
 
   if(!PyArg_UnpackTuple(args, "dumps", 1, 1, &object)) {
       return NULL;
@@ -177,25 +177,25 @@ init_tnetstring(void)
 //  Functions to hook the parser core up to python.
 
 static inline void
-tns_parse_error(const char* errstr)
+tns_parse_error(const char *errstr)
 {
   PyErr_SetString(_tnetstring_LoadError, errstr);
 }
 
 static inline void
-tns_render_error(const char* errstr)
+tns_render_error(const char *errstr)
 {
   PyErr_SetString(_tnetstring_DumpError, errstr);
 }
 
 static inline void*
-tns_parse_string(const char* data, size_t len)
+tns_parse_string(const char *data, size_t len)
 {
   return PyString_FromStringAndSize(data, len);
 }
 
 static inline void*
-tns_parse_integer(const char* data, size_t len)
+tns_parse_integer(const char *data, size_t len)
 {
   long long l;
   char *dataend;
@@ -207,7 +207,7 @@ tns_parse_integer(const char* data, size_t len)
 }
 
 static inline void*
-tns_parse_float(const char* data, size_t len)
+tns_parse_float(const char *data, size_t len)
 {
   double d;
   char *dataend;
@@ -252,19 +252,19 @@ tns_new_list(void)
 }
 
 static inline void
-tns_free_dict(void* dict)
+tns_free_dict(void *dict)
 {
   Py_DECREF(dict);
 }
 
 static inline void
-tns_free_list(void* list)
+tns_free_list(void *list)
 {
   Py_DECREF(list);
 }
 
 static inline int
-tns_add_to_dict(void* dict, void* key, void* item)
+tns_add_to_dict(void *dict, void *key, void *item)
 {
   int res;
   res = PyDict_SetItem(dict, key, item);
@@ -277,7 +277,7 @@ tns_add_to_dict(void* dict, void* key, void* item)
 }
 
 static inline int
-tns_add_to_list(void* list, void* item)
+tns_add_to_list(void *list, void *item)
 {
   int res;
   res = PyList_Append(list, item);
@@ -290,26 +290,14 @@ tns_add_to_list(void* list, void* item)
 
 
 static inline int
-tns_render_string(void *val, char *output, size_t size, size_t *len)
+tns_render_string(void *val, tns_outbuf *outbuf)
 {
-    char *string, *input;
-    string = PyString_AS_STRING(val);
-    *len = PyString_GET_SIZE(val);
-    if(size < *len) {
-        return 1;
-    }
-    // Remember, we need to render it in reverse.
-    input = string + *len - 1;
-    while(input >= string) {
-        *output = *input;
-        output++;
-        input--;
-    }
-    return 0;
+    return tns_outbuf_rputs(outbuf, PyString_AS_STRING(val),
+                                    PyString_GET_SIZE(val));
 }
 
 static inline int
-tns_render_number(void *val, char *output, size_t size, size_t *len)
+tns_render_number(void *val, tns_outbuf *outbuf)
 {
   PyObject *string;
 
@@ -321,69 +309,40 @@ tns_render_number(void *val, char *output, size_t size, size_t *len)
   if(string == NULL) {
       return -1;
   }
-  return tns_render_string(string, output, size, len);
+  return tns_render_string(string, outbuf);
 }
 
 static inline int
-tns_render_bool(void *val, char *output, size_t size, size_t *len)
+tns_render_bool(void *val, tns_outbuf *outbuf)
 {
   if(val == Py_True) {
-      if(size < 4) {
-          return 1;
-      }
-      *len = 4;
-      output[3] = 't';
-      output[2] = 'r';
-      output[1] = 'u';
-      output[0] = 'e';
+      return tns_outbuf_rputs(outbuf, "true", 4);
   } else {
-      if(size < 5) {
-          return 1;
-      }
-      *len = 5;
-      output[4] = 'f';
-      output[3] = 'a';
-      output[2] = 'l';
-      output[1] = 's';
-      output[0] = 'e';
+      return tns_outbuf_rputs(outbuf, "false", 5);
   }
-  return 0;
 }
 
 static inline int
-tns_render_dict(void* val, char *output, size_t size, size_t *len)
+tns_render_dict(void *val, tns_outbuf *outbuf)
 {
-  int res;
-  size_t totallen;
   PyObject *key, *item;
   Py_ssize_t pos = 0;
 
   while(PyDict_Next(val, &pos, &key, &item)) {
-      res = tns_render_value(item, output, size, len);
-      if(res) {
-          return res;
+      if(tns_render_value(item, outbuf) == -1) {
+          return -1;
       }
-      output += *len;
-      size -= *len;
-      totallen += *len;
-      res = tns_render_value(key, output, size, len);
-      if(res) {
-          return res;
+      if(tns_render_value(key, outbuf) == -1) {
+          return -1;
       }
-      output += *len;
-      size -= *len;
-      totallen += *len;
   }
-  *len = totallen;
   return 0;
 }
 
 
 static inline int
-tns_render_list(void *val, char *output, size_t size, size_t *len)
+tns_render_list(void *val, tns_outbuf *outbuf)
 {
-  int res;
-  size_t totallen;
   PyObject *item;
   Py_ssize_t idx;
 
@@ -392,18 +351,14 @@ tns_render_list(void *val, char *output, size_t size, size_t *len)
   idx = PyList_GET_SIZE(val) - 1;
   while(idx >= 0) {
       item = PyList_GET_ITEM(val, idx);
-      res = tns_render_value(item, output, size, len);
-      if(res) {
-          return res;
+      if(tns_render_value(item, outbuf) == -1) {
+          return -1;
       }
-      output += *len;
-      size -= *len;
-      totallen += *len;
       idx--;
   }
-  *len = totallen;
   return 0;
 }
+
 
 static inline char
 tns_get_type(void *val)

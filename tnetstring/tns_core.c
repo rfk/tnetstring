@@ -14,39 +14,45 @@
 #include <stddef.h>
 #include <ctype.h>
 
+typedef struct tns_outbuf_s {
+  char *buffer;
+  size_t used_size;
+  size_t alloc_size;
+} tns_outbuf;
+
 //  After #including this code, you must provide implementations for the
 //  following functions.  They provide the low-level data manipulation
 //  routines from which we can build a parser and renderer.
 
 //  Functions called to describe an error situation.
-static void tns_parse_error(const char* errstr);
-static void tns_render_error(const char* errstr);
+static void tns_parse_error(const char *errstr);
+static void tns_render_error(const char *errstr);
 
 //  Functions to introspect the type of a data object.
-static char tns_get_type(void* val);
+static char tns_get_type(void *val);
 
 //  Functions for parsing and rendering primitive datatypes.
-static void* tns_parse_string(const char* data, size_t len);
-static int tns_render_string(void* val, char* output, size_t size, size_t* len);
-static void* tns_parse_integer(const char* data, size_t len);
-static void* tns_parse_float(const char* data, size_t len);
-static int tns_render_number(void* val, char* output, size_t size, size_t* len);
-static int tns_render_bool(void* val, char* output, size_t size, size_t* len);
+static void *tns_parse_string(const char *data, size_t len);
+static int tns_render_string(void *val, tns_outbuf *outbuf);
+static void *tns_parse_integer(const char *data, size_t len);
+static void *tns_parse_float(const char *data, size_t len);
+static int tns_render_number(void *val, tns_outbuf *outbuf);
+static int tns_render_bool(void *val, tns_outbuf *outbuf);
 
 //  Constructors to get constant primitive datatypes.
-static void* tns_get_null(void);
-static void* tns_get_true(void);
-static void* tns_get_false(void);
+static void *tns_get_null(void);
+static void *tns_get_true(void);
+static void *tns_get_false(void);
 
 //  Functions for manipulating compound datatypes.
-static void* tns_new_dict(void);
+static void *tns_new_dict(void);
 static void tns_free_dict(void*);
-static int tns_add_to_dict(void* dict, void* key, void* item);
-static int tns_render_dict(void* dict, char* output, size_t size, size_t *len);
-static void* tns_new_list(void);
+static int tns_add_to_dict(void *dict, void *key, void *item);
+static int tns_render_dict(void *dict, tns_outbuf *outbuf);
+static void *tns_new_list(void);
 static void tns_free_list(void*);
-static int tns_add_to_list(void* list, void* item);
-static int tns_render_list(void* dict, char* output, size_t size, size_t *len);
+static int tns_add_to_list(void *list, void *item);
+static int tns_render_list(void *dict, tns_outbuf *outbuf);
 
 
 //  The rest of ths code stitches the above functions together into a
@@ -57,7 +63,7 @@ static int tns_render_list(void* dict, char* output, size_t size, size_t *len);
 //  The third argument is an output parameter; if non-NULL it will
 //  receive the unparsed remainder of the string.
 static void*
-tns_parse(const char* data, size_t len, char** remain);
+tns_parse(const char *data, size_t len, char** remain);
 
 //  Render an object into a string.
 //  On success this function returns a malloced string containing
@@ -66,7 +72,7 @@ tns_parse(const char* data, size_t len, char** remain);
 //  The caller is responsible for freeing the returned string.
 //  On failure this function returns NULL.
 static char*
-tns_render(void* val, size_t *len);
+tns_render(void *val, size_t *len);
   
 //  Render an object into a string, in reverse.
 //  This is just like tns_render but the output string contains the
@@ -75,33 +81,47 @@ tns_render(void* val, size_t *len);
 //  copy the string off somewhere anyway, call tns_render_reversed and
 //  save yourself the cost of reversing it in-place.
 static char*
-tns_render_reversed(void* val, size_t *len);
+tns_render_reversed(void *val, size_t *len);
 
 
 //  The rest of these are for internal use only.
 
+static inline int
+tns_str_is_float(const char *data, size_t len);
 
 static inline int
-tns_str_is_float(const char* data, size_t len);
+tns_parse_dict(void *dict, const char *data, size_t len);
 
 static inline int
-tns_parse_dict(void *dict, const char* data, size_t len);
-
-static inline int
-tns_parse_list(void *list, const char* data, size_t len);
+tns_parse_list(void *list, const char *data, size_t len);
 
 static int
-tns_render_value(void* val, char* output, size_t size, size_t *len);
+tns_render_value(void *val, tns_outbuf *outbuf);
 
 static inline int
-tns_itoa_reversed(size_t n, char *output, size_t size, size_t *len);
+tns_outbuf_itoa(size_t n, tns_outbuf *outbuf);
+
+static inline int
+tns_outbuf_init(tns_outbuf *outbuf);
+
+static inline void
+tns_outbuf_free(tns_outbuf *outbuf);
+
+static inline int
+tns_outbuf_extend(tns_outbuf *outbuf);
+
+static inline int
+tns_outbuf_putc(tns_outbuf *outbuf, char c);
+
+static inline int
+tns_outbuf_rputs(tns_outbuf *outbuf, const char *data, size_t len);
 
 static void
-tns_inplace_reverse(char* output, size_t len);
+tns_inplace_reverse(char *data, size_t len);
 
 
 static void*
-tns_parse(const char* data, size_t len, char **remain)
+tns_parse(const char *data, size_t len, char **remain)
 {
   void *val;
   char *valstr;
@@ -202,7 +222,7 @@ tns_parse(const char* data, size_t len, char **remain)
 
 
 static char*
-tns_render(void* val, size_t *len)
+tns_render(void *val, size_t *len)
 {
   char *output;
   output = tns_render_reversed(val, len);
@@ -214,53 +234,29 @@ tns_render(void* val, size_t *len)
 
 
 static char*
-tns_render_reversed(void* val, size_t *len)
+tns_render_reversed(void *val, size_t *len)
 {
-  char *output, *new_output;
-  size_t size;
-  int res;
+  tns_outbuf outbuf;
   
-  //  We start with a resonable-sized buffer, and double it each time
-  //  we find it's too small.  For very large objects we will wind up
-  //  rendering the initial part of the string many times; it would be
-  //  good to remember what we were up to and allow rendering to resume
-  //  near where it was when it errored out.
-  size = 64;
-  output = malloc(size);
-  while(output != NULL) {
-      res = tns_render_value(val, output, size, len);
-      if(res == 0) {
-          //  0 == success
-          break;
-      } else if(res == 1) {
-          //  1 == buffer too small
-          size = size * 2;
-          new_output = realloc(output, size);
-          if(new_output == NULL) {
-              free(output);
-          }
-          output = new_output;
-      } else {
-          //  -1 == rendering error
-          free(output);
-          output = NULL;
-      }
+  if(tns_outbuf_init(&outbuf) == -1 ) {
+      return NULL;
   }
-  return output;
+
+  if(tns_render_value(val, &outbuf) == -1) {
+      tns_outbuf_free(&outbuf);
+  }
+
+  *len = outbuf.used_size;
+  return outbuf.buffer;
 }
 
 
 static int
-tns_render_value(void* val, char* output, size_t size, size_t* len)
+tns_render_value(void *val, tns_outbuf *outbuf)
 {
   char type;
   int res;
-  int totallen;
-
-  //  We need at least enough space for length, colon and type tag.
-  if(size < 3) {
-      return 1;
-  }
+  size_t datalen;
 
   //  Find out the type tag for the given value.
   type = tns_get_type(val);
@@ -268,28 +264,29 @@ tns_render_value(void* val, char* output, size_t size, size_t* len)
       tns_render_error("type not serializable");
       return -1;
   }
+  tns_outbuf_putc(outbuf,type);
+  datalen = outbuf->used_size;
 
   //  Render it into the output buffer, leaving space for the
   //  type tag at the end.
   switch(type) {
     case ',':
-      res = tns_render_string(val, output+1, size-1, len);
+      res = tns_render_string(val, outbuf);
       break;
     case '#':
-      res = tns_render_number(val, output+1, size-1, len);
+      res = tns_render_number(val, outbuf);
       break;
     case '!':
-      res = tns_render_bool(val, output+1, size-1, len);
+      res = tns_render_bool(val, outbuf);
       break;
     case '~':
       res = 0;
-      *len = 0;
       break;
     case '}':
-      res = tns_render_dict(val, output+1, size-1, len);
+      res = tns_render_dict(val, outbuf);
       break;
     case ']':
-      res = tns_render_list(val, output+1, size-1, len);
+      res = tns_render_list(val, outbuf);
       break;
     default:
       tns_render_error("unknown type tag");
@@ -297,41 +294,33 @@ tns_render_value(void* val, char* output, size_t size, size_t* len)
   }
 
   //  If that succeeds, write the framing info.
-  //  This could still fail due to insufficient space.
   if(res == 0) {
-      totallen = *len;
-      if(size < totallen + 3) {
-          return 1;
-      }
-      output[0] = type;
-      totallen += 1;
-      output[totallen] = ':';
-      totallen += 1;
-      res = tns_itoa_reversed(*len, output+totallen, size-totallen, len);
-      *len = totallen + *len;
+      datalen = outbuf->used_size - datalen;
+      tns_outbuf_putc(outbuf, ':');
+      res = tns_outbuf_itoa(datalen, outbuf);
   }
   return res;
 }
 
 
 static void
-tns_inplace_reverse(char* output, size_t len)
+tns_inplace_reverse(char *data, size_t len)
 {
-  char *outend, c;
+  char *dend, c;
 
-  outend = output + len - 1;
-  while(outend > output) {
-      c = *output;
-      *output = *outend;
-      *outend = c;
-      output++;
-      outend--;
+  dend = data + len - 1;
+  while(dend > data) {
+      c = *data;
+      *data = *dend;
+      *dend = c;
+      data++;
+      dend--;
   }
 }
 
 
 static inline int
-tns_str_is_float(const char* data, size_t len)
+tns_str_is_float(const char *data, size_t len)
 {
   size_t i=0;
   while(i < len) {
@@ -348,10 +337,10 @@ tns_str_is_float(const char* data, size_t len)
 
 
 static int
-tns_parse_list(void* val, const char* data, size_t len)
+tns_parse_list(void *val, const char *data, size_t len)
 {
-    void* item;
-    char* remain;
+    void *item;
+    char *remain;
     while(len > 0) {
         item = tns_parse(data, len, &remain);
         len = len - (remain - data);
@@ -368,7 +357,7 @@ tns_parse_list(void* val, const char* data, size_t len)
 
 
 static int
-tns_parse_dict(void* val, const char* data, size_t len)
+tns_parse_dict(void *val, const char *data, size_t len)
 {
     void *key, *item;
     char *remain;
@@ -394,17 +383,99 @@ tns_parse_dict(void* val, const char* data, size_t len)
 
 
 static inline int
-tns_itoa_reversed(size_t n, char *output, size_t size, size_t *len)
+tns_outbuf_itoa(size_t n, tns_outbuf *outbuf)
 {
-  size_t i=0;
-  while(i < size) {
-      output[i++] = n % 10 + '0';
+  while(1) {
+      if(tns_outbuf_putc(outbuf, n%10+'0') == -1) {
+          return -1;
+      }
       n = n / 10;
       if(n == 0) {
-          *len = i;
           return 0;
       }
   }
-  return 1;
+}
+
+
+static inline int
+tns_outbuf_init(tns_outbuf *outbuf)
+{
+  outbuf->buffer = malloc(64);
+  if(outbuf->buffer == NULL) {
+      outbuf->alloc_size = 0;
+      outbuf->used_size = 0;
+      return -1;
+  } else {
+      outbuf->alloc_size = 64;
+      outbuf->used_size = 0;
+      return 0;
+  }
+}
+
+
+static inline void
+tns_outbuf_free(tns_outbuf *outbuf)
+{
+  free(outbuf->buffer);
+  outbuf->buffer = NULL;
+  outbuf->alloc_size = 0;
+  outbuf->used_size = 0;
+}
+
+
+static inline int
+tns_outbuf_extend(tns_outbuf *outbuf)
+{
+  char *new_buf;
+  size_t new_size;
+
+  new_size = outbuf->alloc_size * 2;
+  new_buf = realloc(outbuf->buffer, new_size);
+  if(new_buf == NULL) {
+      return -1;
+  }
+  outbuf->buffer = new_buf;
+  outbuf->alloc_size = new_size;
+  return 0;
+}
+
+
+static inline int
+tns_outbuf_putc(tns_outbuf *outbuf, char c)
+{
+  if(outbuf->alloc_size == outbuf->used_size) {
+      if(tns_outbuf_extend(outbuf) == -1) {
+          return -1;
+      }
+  }
+  outbuf->buffer[outbuf->used_size++] = c;
+  return 0;
+}
+
+
+static inline int
+tns_outbuf_rputs(tns_outbuf *outbuf, const char *data, size_t len)
+{
+  const char *dend;
+  char *buffer;
+
+  //  Make sure we have enough room.
+  while(outbuf->alloc_size - outbuf->used_size < len) {
+      if(tns_outbuf_extend(outbuf) == -1) {
+          return -1;
+      }
+  }
+
+  //  Copy the data in reverse.
+  buffer = outbuf->buffer + outbuf->used_size;
+  dend = data + len - 1;
+  while(dend >= data) {
+      *buffer = *dend;
+      buffer++;
+      dend--;
+  }
+
+  outbuf->used_size += len;
+  return 0;
 }
 
