@@ -66,7 +66,7 @@ setup(name=NAME,
       long_description=LONG_DESC,
       license=LICENSE,
       keywords=KEYWORDS,
-      packages=["tnetstring"],
+      packages=["tnetstring","tnetstring.tests"],
       ext_modules = [
           Extension(name="_tnetstring",sources=["tnetstring/_tnetstring.c"]),
       ],

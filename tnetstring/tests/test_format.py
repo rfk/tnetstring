@@ -51,10 +51,11 @@ def get_random_object(random=random,depth=0):
         if what == 3:
             return random.randint(0,sys.maxint)
         if what == 4:
-            return random.randint(0,sys.maxint)#*1.0/random.randint(0,sys.maxint)
-        if what == 5:
-            n = random.randint(0,200)
-            return "".join(chr(random.randint(0,255)) for _ in xrange(n))
+            return random.randint(0,sys.maxint)*1.0/random.randint(0,sys.maxint)
+        n = random.randint(0,200)
+        return "".join(chr(random.randint(0,255)) for _ in xrange(n))
+
+
 
 class Test_Format(unittest.TestCase):
 

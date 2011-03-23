@@ -313,7 +313,11 @@ tns_render_number(void *val, char *output, size_t size, size_t *len)
 {
   PyObject *string;
 
-  string = PyObject_Str(val);
+  if(PyFloat_Check((PyObject*)val)) {
+      string = PyObject_Repr(val);
+  } else {
+      string = PyObject_Str(val);
+  }
   if(string == NULL) {
       return -1;
   }
