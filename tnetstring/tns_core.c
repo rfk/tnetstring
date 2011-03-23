@@ -143,7 +143,7 @@ tns_parse(const char *data, size_t len, char **remain)
       tns_parse_error("not a tnetstring: no length prefix");
       return NULL;
   }
-  if((valstr + vallen) >= (data + len) || *valstr != ':') {
+  if((valstr + vallen + 1) >= (data + len) || *valstr != ':') {
       tns_parse_error("not a tnetstring: invalid length prefix");
       return NULL;
   }
