@@ -400,6 +400,7 @@ tns_outbuf_itoa(size_t n, tns_outbuf *outbuf)
       }
       n = n / 10;
   } while(n > 0);
+  return 0;
 }
 
 
