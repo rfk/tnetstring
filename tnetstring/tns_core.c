@@ -21,12 +21,12 @@ typedef struct tns_outbuf_s {
 } tns_outbuf;
 
 typedef enum tns_type_tag_e {
-    tns_string_tag = ',',
-    tns_number_tag = '#',
-    tns_bool_tag = '!',
-    tns_null_tag = '~',
-    tns_dict_tag = '}',
-    tns_list_tag = ']',
+    tns_tag_string = ',',
+    tns_tag_number = '#',
+    tns_tag_bool = '!',
+    tns_tag_null = '~',
+    tns_tag_dict = '}',
+    tns_tag_list = ']',
 } tns_type_tag;
 
 //  After #including this code, you must provide implementations for the
@@ -160,12 +160,12 @@ tns_parse(const char *data, size_t len, char **remain)
   //  Now dispatch type parsing based on the type tag.
   switch(type) {
     //  Primitive type: a string blob.
-    case tns_string_tag:
+    case tns_tag_string:
         val = tns_parse_string(valstr, vallen);
         break;
     //  Primitive type: a number.
     //  I'm branching out here and allowing both floats and ints.
-    case tns_number_tag:
+    case tns_tag_number:
         if(tns_str_is_float(valstr,vallen)) {
             val = tns_parse_float(valstr, vallen);
             if(val == NULL) {
@@ -180,7 +180,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Primitive type: a boolean.
     //  The only acceptable values are "true" and "false".
-    case tns_bool_tag:
+    case tns_tag_bool:
         if(vallen == 4 && strncmp(valstr,"true",4) == 0) {
             val = tns_get_true();
         } else if(vallen == 5 && strncmp(valstr,"false",5) == 0) {
@@ -192,7 +192,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Primitive type: a null.
     //  This must be a zero-length string.
-    case tns_null_tag:
+    case tns_tag_null:
         if(vallen != 0) {
             tns_parse_error("not a tnetstring: invalid null literal");
             val = NULL;
@@ -202,7 +202,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Compound type: a dict.
     //  The data is written <key><value><key><value>
-    case tns_dict_tag:
+    case tns_tag_dict:
         val = tns_new_dict();
         if(tns_parse_dict(val,valstr,vallen) == -1) {
             tns_free_dict(val);
@@ -212,7 +212,7 @@ tns_parse(const char *data, size_t len, char **remain)
         break;
     //  Compound type: a list.
     //  The data is written <item><item><item>
-    case tns_list_tag:
+    case tns_tag_list:
         val = tns_new_list();
         if(tns_parse_list(val,valstr,vallen) == -1) {
             tns_free_list(val);
@@ -279,22 +279,22 @@ tns_render_value(void *val, tns_outbuf *outbuf)
   //  Render it into the output buffer, leaving space for the
   //  type tag at the end.
   switch(type) {
-    case tns_string_tag:
+    case tns_tag_string:
       res = tns_render_string(val, outbuf);
       break;
-    case tns_number_tag:
+    case tns_tag_number:
       res = tns_render_number(val, outbuf);
       break;
-    case tns_bool_tag:
+    case tns_tag_bool:
       res = tns_render_bool(val, outbuf);
       break;
-    case tns_null_tag:
+    case tns_tag_null:
       res = 0;
       break;
-    case tns_dict_tag:
+    case tns_tag_dict:
       res = tns_render_dict(val, outbuf);
       break;
-    case tns_list_tag:
+    case tns_tag_list:
       res = tns_render_list(val, outbuf);
       break;
     default:

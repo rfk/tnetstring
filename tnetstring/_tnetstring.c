@@ -364,25 +364,25 @@ static inline tns_type_tag
 tns_get_type(void *val)
 {
   if(val == Py_True || val == Py_False) {
-    return tns_bool_tag;
+    return tns_tag_bool;
   }
   if(val == Py_None) {
-    return tns_null_tag;
+    return tns_tag_null;
   }
   if(PyInt_Check((PyObject*)val) || PyLong_Check((PyObject*)val)) {
-    return tns_number_tag;
+    return tns_tag_number;
   }
   if(PyFloat_Check((PyObject*)val)) {
-    return tns_number_tag;
+    return tns_tag_number;
   }
   if(PyString_Check((PyObject*)val)) {
-    return tns_string_tag;
+    return tns_tag_string;
   }
   if(PyList_Check((PyObject*)val)) {
-    return tns_list_tag;
+    return tns_tag_list;
   }
   if(PyDict_Check((PyObject*)val)) {
-    return tns_dict_tag;
+    return tns_tag_dict;
   }
   return 0;
 }
