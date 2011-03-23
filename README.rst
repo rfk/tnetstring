@@ -25,14 +25,18 @@ And here's a list mixing integers and bools::
 
 Simple enough?  This module gives you the following functions:
 
-    :dump:    dump an object as a tnetstring to a file
     :dumps:   dump an object as a tnetstring to a string
-    :load:    load a tnetstring-encoded object from a file
     :loads:   load a tnetstring-encoded object from a string
     :pop:     pop a tnetstring-encoded object from the front of a string
 
+
+When I get around to it, I will also add the following:
+
+    :dump:    dump an object as a tnetstring to a file
+    :load:    load a tnetstring-encoded object from a file
+
 Note that since parsing a tnetstring requires reading all the data into memory
 at once, there's no efficiency gain from using the file-based versions of these
-functions; they're there only for API compatability with other serialization
-modules e.g. pickle and json.
+functions; I'm only planning to add them for API compatability with other
+serialization modules e.g. pickle and json.
 

@@ -25,16 +25,20 @@ And here's a list mixing integers and bools::
 
 Simple enough?  This module gives you the following functions:
 
-    :dump:    dump an object as a tnetstring to a file
     :dumps:   dump an object as a tnetstring to a string
-    :load:    load a tnetstring-encoded object from a file
     :loads:   load a tnetstring-encoded object from a string
     :pop:     pop a tnetstring-encoded object from the front of a string
 
+
+When I get around to it, I will also add the following:
+
+    :dump:    dump an object as a tnetstring to a file
+    :load:    load a tnetstring-encoded object from a file
+
 Note that since parsing a tnetstring requires reading all the data into memory
 at once, there's no efficiency gain from using the file-based versions of these
-functions; they're there only for API compatability with other serialization
-modules e.g. pickle and json.
+functions; I'm only planning to add them for API compatability with other
+serialization modules e.g. pickle and json.
 
 """
 
@@ -45,6 +49,92 @@ __ver_sub__ = ""
 __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,__ver_patch__,__ver_sub__)
 
 
+class Error(Exception):
+    pass
+
+class LoadError(Error):
+    pass
+
+class DumpError(Error):
+    pass
+
+
+def dumps(v):
+    d = _dump_value(v)
+    return "%d:%s" % (len(d)-1,d)
+
+def _dump_value(v):
+    if v is None:
+        return "~"
+    if v is True:
+        return "true!"
+    if v is False:
+        return "false!"
+    if isinstance(v,(int,long)):
+        return str(v) + "#"
+    if isinstance(v,(float,)):
+        return repr(v) + "#"
+    if isinstance(v,(str,)):
+        return v + ","
+    if isinstance(v,(list,tuple,)):
+        return "".join(dumps(item) for item in v) + "]"
+    if isinstance(v,(dict,)):
+        def getitems():
+            for (k,i) in v.iteritems():
+                yield dumps(k)
+                yield dumps(i)
+        return "".join(getitems()) + "}"
+    raise DumpError("unserializable object")
+
+
+def loads(string):
+    return pop(string)[0]
+
+
+def pop(string):
+    (data,type,rest) = _pop_netstring(string)
+    if type == ",":
+        return (data,rest)
+    if type == "#":
+        if "." in data or "e" in data or "E" in data:
+            return (float(data),rest)
+        else:
+            return (int(data),rest)
+    if type == "!":
+        if data == "true":
+            return (True,rest)
+        else:
+            return (False,rest)
+    if type == "~":
+        if data:
+            raise LoadError("null must be zero length")
+        return (None,rest)
+    if type == "]":
+        l = []
+        while data:
+            (item,data) = pop(data)
+            l.append(item)
+        return (l,rest)
+    if type == "}":
+        d = {}
+        while data:
+            (key,data) = pop(data)
+            (val,data) = pop(data)
+            d[key] = val
+        return (d,rest)
+    raise LoadError("unknown type tag")
+
+
+def _pop_netstring(string):
+    if not string:
+        raise LoadError("empty string")
+    (dlen,rest) = string.split(":",1)
+    dlen = int(dlen)
+    (data,type,rest) = (rest[:dlen],rest[dlen],rest[dlen+1:])
+    if len(data) != dlen or not type:
+        raise LoadError("badly formatted")
+    return (data,type,rest)
+
 
 #  Use the c-extension version if available
 try:
@@ -52,6 +142,9 @@ try:
 except ImportError:
     pass
 else:
+    Error = _tnetstring.Error
+    LoadError = _tnetstring.LoadError
+    DumpError = _tnetstring.DumpError
     #dump = _tnetstring.dump
     dumps = _tnetstring.dumps
     #load = _tnetstring.load

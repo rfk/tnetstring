@@ -14,7 +14,7 @@
 
 
 static PyObject *_tnetstring_Error;
-static PyObject *_tnetstring_ParseError;
+static PyObject *_tnetstring_LoadError;
 static PyObject *_tnetstring_DumpError;
 
 
@@ -156,13 +156,13 @@ init_tnetstring(void)
   Py_INCREF(_tnetstring_Error);
   PyModule_AddObject(m, "Error", _tnetstring_Error);
 
-  _tnetstring_ParseError = PyErr_NewException("_tnetstring.ParseError",
+  _tnetstring_LoadError = PyErr_NewException("_tnetstring.LoadError",
                                               _tnetstring_Error,NULL);
-  if(_tnetstring_ParseError == NULL) {
+  if(_tnetstring_LoadError == NULL) {
       return;
   }
-  Py_INCREF(_tnetstring_ParseError);
-  PyModule_AddObject(m, "ParseError", _tnetstring_ParseError);
+  Py_INCREF(_tnetstring_LoadError);
+  PyModule_AddObject(m, "LoadError", _tnetstring_LoadError);
 
   _tnetstring_DumpError = PyErr_NewException("_tnetstring.DumpError",
                                               _tnetstring_Error,NULL);
@@ -179,7 +179,7 @@ init_tnetstring(void)
 static inline void
 tns_parse_error(const char* errstr)
 {
-  PyErr_SetString(_tnetstring_ParseError, errstr);
+  PyErr_SetString(_tnetstring_LoadError, errstr);
 }
 
 static inline void

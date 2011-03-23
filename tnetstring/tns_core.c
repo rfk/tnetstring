@@ -224,7 +224,7 @@ tns_render_reversed(void* val, size_t *len)
   //  we find it's too small.  For very large objects we will wind up
   //  rendering the initial part of the string many times; it would be
   //  good to remember what we were up to and allow rendering to resume
-  //  near where it was last time.
+  //  near where it was when it errored out.
   size = 64;
   output = malloc(size);
   while(output != NULL) {

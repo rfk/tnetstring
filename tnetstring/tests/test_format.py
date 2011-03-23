@@ -2,6 +2,7 @@
 import sys
 import unittest
 import random
+import StringIO
 
 
 import tnetstring
@@ -76,9 +77,11 @@ class Test_Format(unittest.TestCase):
         for data, expect in FORMAT_EXAMPLES.items():
             self.assertEqual(expect,tnetstring.loads(data))
             self.assertEqual(expect,tnetstring.loads(tnetstring.dumps(expect)))
+            self.assertEqual((expect,""),tnetstring.pop(data))
 
     def test_roundtrip_format_random(self):
         for _ in xrange(500):
             v = get_random_object()
             self.assertEqual(v,tnetstring.loads(tnetstring.dumps(v)))
+            self.assertEqual((v,""),tnetstring.pop(tnetstring.dumps(v)))
 
