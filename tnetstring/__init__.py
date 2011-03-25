@@ -6,7 +6,7 @@ tnetstring:  data serialization using typed netstrings
 
 This is a data serialization library. It's a lot like JSON but it uses a
 new syntax called "typed netstrings" that Zed has proposed for use in the
-the Mongrel2 webserver.  It's designed to be simpler and easier to implement
+Mongrel2 webserver.  It's designed to be simpler and easier to implement
 than JSON, with a happy consequence of also being faster.
 
 An ordinary netstring is a blob of data prefixed with its length and postfixed
