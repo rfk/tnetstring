@@ -76,8 +76,9 @@ tns_parse(const char *data, size_t len, char** remain);
 
 //  Render an object into a string.
 //  On success this function returns a malloced string containing
-//  the serialization of the given object.  If the second argument
-//  'len' is non-NULL it will receive the number of bytes in the string.
+//  the serialization of the given object.  The second argument
+//  'len' is an output parameter that will receive the number of bytes in
+//  the string; it must not be NULL.
 //  The caller is responsible for freeing the returned string.
 //  On failure this function returns NULL.
 static char*
