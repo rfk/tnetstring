@@ -295,7 +295,19 @@ def pop(string):
     It returns a tuple giving the parsed object and a string
     containing any unparsed data from the end of the string.
     """
-    (data,type,remain) = _pop_netstring(string)
+    #  Parse out data length, type and remaining string.
+    try:
+        (dlen,rest) = string.split(":",1)
+        dlen = int(dlen)
+    except ValueError:
+        raise LoadError("not a tnetstring: missing or invalid length prefix")
+    try:
+        (data,type,remain) = (rest[:dlen],rest[dlen],rest[dlen+1:])
+    except IndexError:
+        raise LoadError("not a tnetstring: invalid length prefix")
+    if len(data) != dlen or not type:
+        raise LoadError("not a tnetstring: invalid length prefix")
+    #  Parse the data based on the type tag.
     if type == ",":
         return (data,remain)
     if type == "#":
@@ -335,20 +347,6 @@ def pop(string):
         return (d,remain)
     raise LoadError("unknown type tag")
 
-
-def _pop_netstring(string):
-    try:
-        (dlen,rest) = string.split(":",1)
-        dlen = int(dlen)
-    except ValueError:
-        raise LoadError("not a tnetstring: missing or invalid length prefix")
-    try:
-        (data,type,rest) = (rest[:dlen],rest[dlen],rest[dlen+1:])
-    except IndexError:
-        raise LoadError("not a tnetstring: invalid length prefix")
-    if len(data) != dlen or not type:
-        raise LoadError("not a tnetstring: invalid length prefix")
-    return (data,type,rest)
 
 
 #  Use the c-extension version if available
