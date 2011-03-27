@@ -49,6 +49,9 @@ __ver_sub__ = ""
 __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,__ver_patch__,__ver_sub__)
 
 
+from collections import deque
+
+
 try:
     from cStringIO import StringIO
 except ImportError:
@@ -68,65 +71,153 @@ class DumpError(Error):
     pass
 
 
+
 def dumps(value):
     """dumps(object) -> string
 
     This function dumps a python object as a tnetstring.
     """
+    #  This uses the naive bottom-up generator, it's quite slow.
     #return "".join(_gdumps(value))
-    s = StringIO()
-    _rdumps(s,value)
-    return s.getvalue()[::-1]
+    #  This uses the write-in-reverse trick from the C version.
+    #  It's faster, but loses a lot in reversing the python strings.
+    #s = StringIO()
+    #_rdumps(s,value)
+    #return s.getvalue()[::-1]
+    #  This uses a deque to collect output fragments in reverse order.
+    #  It's slightly faster than the _rdumps version as the strings
+    #  don't need to be reversed when outputting them.
+    q = deque()
+    _rdumpq(q,0,value)
+    return "".join(q)
 
 
 def _rdumps(s,value):
     """Dump value as a tnetstring, to a StringIO instance, in reverse.
 
+    This function writes out the tnetstring representation of the given value
+    to the given StringIO instance, in reverse.  Yes, in reverse.
+
     Writing in reverse makes it easier to calculate all the length prefixes
     without building every little intermediate string.  Unfortunately it means
-    we have to reverse the string for each literal, but it seems to pay off
-    in practice.
+    we have to reverse the string for each literal, but it pays off compared
+    to the naive version.
     """
+    write = s.write
     if value is None:
-        s.write("~:0")
+        write("~:0")
     elif value is True:
-        s.write("!eurt:4")
+        write("!eurt:4")
     elif value is False:
-        s.write("!eslaf:5")
+        write("!eslaf:5")
     elif isinstance(value,(int,long)):
         data = str(value) 
-        s.write("#")
-        s.write(data[::-1])
-        s.write(":")
-        s.write(str(len(data))[::-1])
+        write("#")
+        write(data[::-1])
+        write(":")
+        write(str(len(data))[::-1])
     elif isinstance(value,(float,)):
         data = repr(value) 
-        s.write("#")
-        s.write(data[::-1])
-        s.write(":")
-        s.write(str(len(data))[::-1])
+        write("#")
+        write(data[::-1])
+        write(":")
+        write(str(len(data))[::-1])
     elif isinstance(value,(str,)):
-        s.write(",")
-        s.write(value[::-1])
-        s.write(":")
-        s.write(str(len(value))[::-1])
+        write(",")
+        write(value[::-1])
+        write(":")
+        write(str(len(value))[::-1])
     elif isinstance(value,(list,tuple,)):
-        s.write("]")
+        write("]")
         i = s.tell()
         for item in reversed(value):
             _rdumps(s,item)
         i = s.tell() - i
-        s.write(":")
-        s.write(str(i)[::-1])
+        write(":")
+        write(str(i)[::-1])
     elif isinstance(value,(dict,)):
-        s.write("}")
+        write("}")
         i = s.tell()
         for (k,v) in value.iteritems():
             _rdumps(s,v)
             _rdumps(s,k)
         i = s.tell() - i
-        s.write(":")
-        s.write(str(i)[::-1])
+        write(":")
+        write(str(i)[::-1])
+    else:
+        raise DumpError("unserializable object")
+
+
+def _rdumpq(q,size,value):
+    """Dump value as a tnetstring, to a deque instance, last chunks first.
+
+    This function generates the tnetstring representation of the given value,
+    pushing chunks of the output onto the given deque instance.  It pushes
+    the last chunk first, then recursively generates more chunks.
+
+    When passed in the current size of the string in the queue, it will return
+    the new size of the string in the queue.
+
+    Operating last-chunk-first makes it easy to calculate the size written
+    for recursive structures without having to build their representation as
+    a string.  This is measurably faster than the _rdumps version because
+    it avoid having to reverse lots of strings.
+    """
+    write = q.appendleft
+    if value is None:
+        write("0:~")
+        return size + 3
+    elif value is True:
+        write("4:true!")
+        return size + 7
+    elif value is False:
+        write("5:false!")
+        return size + 8
+    elif isinstance(value,(int,long)):
+        data = str(value) 
+        ldata = len(data)
+        span = str(ldata)
+        write("#")
+        write(data)
+        write(":")
+        write(span)
+        return size + 2 + len(span) + ldata
+    elif isinstance(value,(float,)):
+        data = repr(value) 
+        ldata = len(data)
+        span = str(ldata)
+        write("#")
+        write(data)
+        write(":")
+        write(span)
+        return size + 2 + len(span) + ldata
+    elif isinstance(value,(str,)):
+        lvalue = len(value)
+        span = str(lvalue)
+        write(",")
+        write(value)
+        write(":")
+        write(span)
+        return size + 2 + len(span) + lvalue
+    elif isinstance(value,(list,tuple,)):
+        write("]")
+        i = size = size + 1
+        for item in reversed(value):
+            size = _rdumpq(q,size,item)
+        span = str(size - i)
+        write(":")
+        write(span)
+        return size + 1 + len(span)
+    elif isinstance(value,(dict,)):
+        write("}")
+        i = size = size + 1
+        for (k,v) in value.iteritems():
+            size = _rdumpq(q,size,v)
+            size = _rdumpq(q,size,k)
+        span = str(size - i)
+        write(":")
+        write(span)
+        return size + 1 + len(span)
     else:
         raise DumpError("unserializable object")
 
@@ -137,8 +228,8 @@ def _gdumps(value):
     This is the naive dumping algorithm, implemented as a generator so that
     it's easy to pass to "".join() without building a new list.
 
-    This is mainly here for experimentation purposes; the _rdumps() version
-    is measurably faster on the testcases we use here.
+    This is mainly here for experimentation purposes; the _rdumps and _rdumpq
+    versions are measurably faster.
     """
     if value is None:
         yield "0:~"
