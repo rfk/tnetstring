@@ -78,7 +78,7 @@ tns_parse(const char *data, size_t len, char** remain);
 //  On success this function returns a malloced string containing
 //  the serialization of the given object.  The second argument
 //  'len' is an output parameter that will receive the number of bytes in
-//  the string; it must not be NULL.
+//  the string; if NULL then the string will be null-terminated.
 //  The caller is responsible for freeing the returned string.
 //  On failure this function returns NULL.
 static char*
@@ -234,12 +234,22 @@ tns_parse(const char *data, size_t len, char **remain)
 static char*
 tns_render(void *val, size_t *len)
 {
-  char *output;
-  output = tns_render_reversed(val, len);
-  if(output != NULL) {
-      tns_inplace_reverse(output, *len);
+  tns_outbuf outbuf;
+
+  if(tns_outbuf_init(&outbuf) == -1 ) {
+      return NULL;
   }
-  return output;
+  if(tns_render_value(val, &outbuf) == -1) {
+      tns_outbuf_free(&outbuf);
+  } else {
+      tns_inplace_reverse(outbuf.buffer, outbuf.used_size);
+      if(len != NULL) {
+          *len = outbuf.used_size;
+      } else {
+          tns_outbuf_putc(&outbuf, '\0');
+      }
+  }
+  return outbuf.buffer;
 }
 
 
@@ -251,11 +261,9 @@ tns_render_reversed(void *val, size_t *len)
   if(tns_outbuf_init(&outbuf) == -1 ) {
       return NULL;
   }
-
   if(tns_render_value(val, &outbuf) == -1) {
       tns_outbuf_free(&outbuf);
   }
-
   *len = outbuf.used_size;
   return outbuf.buffer;
 }
