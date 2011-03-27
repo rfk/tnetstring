@@ -14,7 +14,7 @@ with a sanity-checking comma.  The string "hello world" encodes like this::
 
     11:hello world,
 
-Typed netstings add other datatypes by replacing the comma with a type tag.
+Typed netstrings add other datatypes by replacing the comma with a type tag.
 Here's the integer 12345 encoded as a tnetstring::
 
     5:12345#

@@ -64,7 +64,7 @@ static int tns_add_to_list(void *list, void *item);
 static int tns_render_list(void *dict, tns_outbuf *outbuf);
 
 
-//  The rest of ths code stitches the above functions together into a
+//  The rest of this code stitches the above functions together into a
 //  tnetstring parser and renderer.  You get the following functions:
 
 //  Parse an object off the front of a tnetstring.
