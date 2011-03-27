@@ -275,6 +275,8 @@ tns_render_value(void *val, tns_outbuf *outbuf)
       return -1;
   }
   tns_outbuf_putc(outbuf,type);
+  //  We need to measure length of data written after this
+  //  point, so record the initial used size before writing anything.
   datalen = outbuf->used_size;
 
   //  Render it into the output buffer, leaving space for the
