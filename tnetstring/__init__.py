@@ -304,8 +304,8 @@ def pop(string):
     try:
         (data,type,remain) = (rest[:dlen],rest[dlen],rest[dlen+1:])
     except IndexError:
-        raise LoadError("not a tnetstring: invalid length prefix")
-    if len(data) != dlen or not type:
+        #  This fires if len(rest) < dlen, meaning we don't need
+        #  to validate that data is the right length.
         raise LoadError("not a tnetstring: invalid length prefix")
     #  Parse the data based on the type tag.
     if type == ",":
