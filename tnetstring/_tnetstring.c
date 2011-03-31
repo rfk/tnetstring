@@ -10,13 +10,14 @@
 
 #include <Python.h>
 
-#include "tns_core.c"
-
-
 static PyObject *_tnetstring_Error;
 static PyObject *_tnetstring_LoadError;
 static PyObject *_tnetstring_DumpError;
 
+#include "tns_core.c"
+
+
+FILE * LOG_FILE = NULL;
 
 static PyObject*
 _tnetstring_loads(PyObject* self, PyObject *args) 
@@ -79,32 +80,32 @@ static PyObject*
 _tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds) 
 {
   PyObject *object, *string;
-  char *output, *odata, *sdata;
-  size_t len=0;
+  tns_outbuf outbuf;
 
   if(!PyArg_UnpackTuple(args, "dumps", 1, 1, &object)) {
       return NULL;
   }
   Py_INCREF(object);
 
-  output = tns_render_reversed(object, &len);
-  Py_DECREF(object);
-  if(output == NULL) {
+  
+  if(tns_outbuf_init(&outbuf) == -1) {
+      Py_DECREF(object);
+      return NULL;
+  }
+  if(tns_render_value(object, &outbuf) == -1) {
+      Py_DECREF(object);
       return NULL;
   }
 
-  string = PyString_FromStringAndSize(NULL,len);
+  Py_DECREF(object);
+  string = PyString_FromStringAndSize(NULL,outbuf.used_size);
   if(string == NULL) {
       return NULL;
   }
-  sdata = PyString_AS_STRING(string);
-  odata = output + len - 1;
-  while(odata >= output) {
-      *sdata = *odata;
-      odata--;
-      sdata++;
-  }
-  free(output);
+
+  tns_outbuf_memmove(&outbuf, PyString_AS_STRING(string));
+  free(outbuf.buffer);
+
   return string;
 }
 
@@ -143,6 +144,8 @@ PyMODINIT_FUNC
 init_tnetstring(void)
 {
   PyObject *m;
+
+  LOG_FILE = stderr;
 
   m = Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
   if(m == NULL) {
@@ -194,29 +197,46 @@ tns_parse_string(const char *data, size_t len)
   return PyString_FromStringAndSize(data, len);
 }
 
-static inline void*
-tns_parse_integer(const char *data, size_t len)
+
+static inline int
+tns_str_is_float(const char *data, size_t len)
 {
-  long long l;
-  char *dataend;
-  l = strtoll(data, &dataend, 10);
-  if(dataend != data + len) {
-      return NULL;
+  size_t i=0;
+  while(i < len) {
+      switch(data[i]) {
+        case '.':
+        case 'e':
+        case 'E':
+          return 1;
+      }
+      i++;
   }
-  return PyLong_FromLongLong(l);
+  return 0;
 }
 
+
 static inline void*
-tns_parse_float(const char *data, size_t len)
+tns_parse_number(const char *data, size_t len)
 {
   double d;
+  long long l;
   char *dataend;
-  d = strtod(data, &dataend);
-  if(dataend != data + len) {
-      return NULL;
+  if(tns_str_is_float(data, len)) {
+      d = strtod(data, &dataend);
+      if(dataend != data + len) {
+          return NULL;
+      }
+      return PyFloat_FromDouble(d);
+  } else {
+      l = strtoll(data, &dataend, 10);
+      if(dataend != data + len) {
+          return NULL;
+      }
+      return PyLong_FromLongLong(l);
   }
-  return PyFloat_FromDouble(d);
+  return NULL;
 }
+
 
 static inline void*
 tns_get_null(void)
@@ -252,15 +272,9 @@ tns_new_list(void)
 }
 
 static inline void
-tns_free_dict(void *dict)
+tns_free_value(void *value)
 {
-  Py_DECREF(dict);
-}
-
-static inline void
-tns_free_list(void *list)
-{
-  Py_DECREF(list);
+  Py_XDECREF(value);
 }
 
 static inline int
@@ -292,8 +306,8 @@ tns_add_to_list(void *list, void *item)
 static inline int
 tns_render_string(void *val, tns_outbuf *outbuf)
 {
-    return tns_outbuf_rputs(outbuf, PyString_AS_STRING(val),
-                                    PyString_GET_SIZE(val));
+    return tns_outbuf_puts(outbuf, PyString_AS_STRING(val),
+                                   PyString_GET_SIZE(val));
 }
 
 static inline int
@@ -316,9 +330,9 @@ static inline int
 tns_render_bool(void *val, tns_outbuf *outbuf)
 {
   if(val == Py_True) {
-      return tns_outbuf_rputs(outbuf, "true", 4);
+      return tns_outbuf_puts(outbuf, "true", 4);
   } else {
-      return tns_outbuf_rputs(outbuf, "false", 5);
+      return tns_outbuf_puts(outbuf, "false", 5);
   }
 }
 
