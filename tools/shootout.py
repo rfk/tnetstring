@@ -3,6 +3,7 @@ import random
 
 import cjson
 import yajl
+import ujson
 import tnetstring
 
 from tnetstring.tests.test_format import FORMAT_EXAMPLES, get_random_object
@@ -13,6 +14,7 @@ def add_test(v):
     try:
         assert cjson.decode(cjson.encode(v)) == v
         assert yajl.loads(yajl.dumps(v)) == v
+        assert ujson.loads(ujson.dumps(v)) == v
     except Exception:
         pass
     else:
@@ -39,6 +41,11 @@ def thrash_yajl():
         assert yajl.loads(json) == obj
         assert yajl.loads(yajl.dumps(obj)) == obj
 
+def thrash_ujson():
+    for obj, tns, json in TESTS:
+        assert ujson.loads(json) == obj
+        assert ujson.loads(ujson.dumps(obj)) == obj
+
 
 if __name__ == "__main__":
     import timeit
@@ -46,15 +53,23 @@ if __name__ == "__main__":
                       "from shootout import thrash_tnetstring")
     t1 = min(t1.repeat(number=10000))
     print "tnetstring", t1
+
     t2 = timeit.Timer("thrash_cjson()",
                       "from shootout import thrash_cjson")
     t2 = min(t2.repeat(number=10000))
     print "cjson:", t2
     print "speedup: ", round((t2 - t1) / (t2) * 100,2), "%"
+
     t3 = timeit.Timer("thrash_yajl()",
                       "from shootout import thrash_yajl")
     t3 = min(t3.repeat(number=10000))
     print "yajl:", t3
     print "speedup: ", round((t3 - t1) / (t3) * 100,2), "%"
+
+    t4 = timeit.Timer("thrash_ujson()",
+                      "from shootout import thrash_ujson")
+    t4 = min(t4.repeat(number=10000))
+    print "ujson:", t4
+    print "speedup: ", round((t4 - t1) / (t4) * 100,2), "%"
 
 
