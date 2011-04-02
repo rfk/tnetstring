@@ -17,14 +17,15 @@
 #include <stddef.h>
 #include <ctype.h>
 
-#include "dbg.h"
+//  tnetstring rendering is done using an "outbuf" struct, which combines
+//  a malloced string with its allocation information.  Rendering is done
+//  from front to back; the details are deliberately hidden here since
+//  I'm experimenting with multiple implementations.
+struct tns_outbuf_s;
+typedef struct tns_outbuf_s tns_outbuf;
 
-typedef struct tns_outbuf_s {
-  char *buffer;
-  size_t used_size;
-  size_t alloc_size;
-} tns_outbuf;
-
+//  This enumeration gives the type tag for each data type in the
+//  tnetstring encoding.
 typedef enum tns_type_tag_e {
     tns_tag_string = ',',
     tns_tag_number = '#',
@@ -33,6 +34,7 @@ typedef enum tns_type_tag_e {
     tns_tag_dict = '}',
     tns_tag_list = ']',
 } tns_type_tag;
+
 
 //  You must provide implementations for the following functions.
 //  They provide the low-level data manipulation routines from which
@@ -82,29 +84,13 @@ static void* tns_parse(const char *data, size_t len, char** remain);
 //  On failure this function returns NULL and 'len' is unmodified.
 static char* tns_render(void *val, size_t *len);
 
-
 //  If you need to copy the final result off somewhere else, you 
 //  might like to build your own rendering function from the following.
-//  It will avoid some double-copying that tns_render does in order
-//  to return a proper C string.
+//  It will avoid some double-copying that tns_render does internally.
 //  Basic plan: Initialize an outbuf, pass it to tns_render_value, then
 //  copy the bytes away using tns_outbuf_memmove.
-static inline int tns_outbuf_init(tns_outbuf *outbuf);
+static int tns_outbuf_init(tns_outbuf *outbuf);
 static int tns_render_value(void *val, tns_outbuf *outbuf);
 static void tns_outbuf_memmove(tns_outbuf *outbuf, char *dest);
-
-
-
-//  The rest of these are for internal use only.
-
-static inline int tns_parse_dict(void *dict, const char *data, size_t len);
-static inline int tns_parse_list(void *list, const char *data, size_t len);
-static inline int tns_outbuf_itoa(tns_outbuf *outbuf, size_t n);
-static inline int tns_outbuf_extend(tns_outbuf *outbuf);
-static inline int tns_outbuf_putc(tns_outbuf *outbuf, char c);
-static int tns_outbuf_puts(tns_outbuf *outbuf, const char *data, size_t len);
-static inline int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size);
-static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len);
-static inline void tns_outbuf_free(tns_outbuf *outbuf);
 
 #endif

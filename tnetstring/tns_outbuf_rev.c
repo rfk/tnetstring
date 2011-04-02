@@ -1,9 +1,33 @@
+//
+//  tns_outbuf_rev:  tns_outbuf implemented by writing in reverse.
+//
+//  This outbuf implementation writes data starting at the front of the
+//  allocated buffer, but writes it in reverse.  To finalize it you do
+//  an in-place reverse before returning the buffer.
+//
+//  The advantage of this scheme is that the data is at the beginning
+//  of the allocated buffer, so you can extend it using realloc and pass
+//  it around as if it were a normal string.  However, the final copying
+//  of the data has to be done in reverse so we can't use memmove.
 
-#include "tns_core.h"
+struct tns_outbuf_s {
+  char *buffer;
+  size_t used_size;
+  size_t alloc_size;
+};
+
+
+static inline size_t tns_outbuf_size(tns_outbuf *outbuf)
+{
+  return outbuf->used_size;
+}
+
 
 static inline void tns_inplace_reverse(char *data, size_t len)
 {
-  char *dend, c;
+  char *dend = NULL;
+  char c = '0';
+
   dend = data + len - 1;
   while(dend > data) {
       c = *data;
@@ -57,10 +81,14 @@ static inline void tns_outbuf_free(tns_outbuf *outbuf)
 }
 
 
-static inline int tns_outbuf_extend(tns_outbuf *outbuf)
+static inline int tns_outbuf_extend(tns_outbuf *outbuf, size_t free_size)
 {
   char *new_buf = NULL;
   size_t new_size = outbuf->alloc_size * 2;
+
+  while(new_size < free_size + outbuf->used_size) {
+      new_size = new_size * 2;
+  }
 
   new_buf = realloc(outbuf->buffer, new_size);
   check_mem(new_buf);
@@ -78,7 +106,7 @@ error:
 static inline int tns_outbuf_putc(tns_outbuf *outbuf, char c)
 {
   if(outbuf->alloc_size == outbuf->used_size) {
-      check(tns_outbuf_extend(outbuf) != -1, "Failed to extend buffer");
+      check(tns_outbuf_extend(outbuf, 1) != -1, "Failed to extend buffer");
   }
 
   outbuf->buffer[outbuf->used_size++] = c;
@@ -96,8 +124,8 @@ static int tns_outbuf_puts(tns_outbuf *outbuf, const char *data, size_t len)
   char *buffer = NULL;
 
   //  Make sure we have enough room.
-  while(outbuf->alloc_size - outbuf->used_size < len) {
-      check(tns_outbuf_extend(outbuf) != -1, "Failed to extend buffer");
+  if(outbuf->alloc_size - outbuf->used_size < len) {
+      check(tns_outbuf_extend(outbuf, len) != -1, "Failed to extend buffer");
   }
 
   //  Copy the data in reverse.

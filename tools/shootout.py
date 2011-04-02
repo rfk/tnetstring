@@ -28,23 +28,27 @@ for _ in xrange(20):
 
 def thrash_tnetstring():
     for obj, tns, json in TESTS:
+#        tnetstring.dumps(obj)
         assert tnetstring.loads(tns) == obj
-        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
+#        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
 
 def thrash_cjson():
     for obj, tns, json in TESTS:
+#        cjson.encode(obj)
         assert cjson.decode(json) == obj
-        assert cjson.decode(cjson.encode(obj)) == obj
+#        assert cjson.decode(cjson.encode(obj)) == obj
 
 def thrash_yajl():
     for obj, tns, json in TESTS:
+#        yajl.dumps(obj)
         assert yajl.loads(json) == obj
-        assert yajl.loads(yajl.dumps(obj)) == obj
+#        assert yajl.loads(yajl.dumps(obj)) == obj
 
 def thrash_ujson():
     for obj, tns, json in TESTS:
+#        ujson.dumps(obj)
         assert ujson.loads(json) == obj
-        assert ujson.loads(ujson.dumps(obj)) == obj
+#        assert ujson.loads(ujson.dumps(obj)) == obj
 
 
 if __name__ == "__main__":

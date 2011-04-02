@@ -10,18 +10,34 @@
 //  and then #include "tns_core.c" to stitch them into a tnetstring parser.
 //
 
-#include "tns_core.h"
-#include "tns_outbuf_rev.c"
+#include <stdlib.h>
+#include <stddef.h>
+#include <ctype.h>
 
-static void*
-tns_parse(const char *data, size_t len, char **remain)
+#include "dbg.h"
+
+#include "tns_core.h"
+
+//  These are our internal-use functions.
+
+static int tns_parse_dict(void *dict, const char *data, size_t len);
+static int tns_parse_list(void *list, const char *data, size_t len);
+static int tns_outbuf_putc(tns_outbuf *outbuf, char c);
+static int tns_outbuf_puts(tns_outbuf *outbuf, const char *data, size_t len);
+static int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size);
+static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len);
+static void tns_outbuf_free(tns_outbuf *outbuf);
+
+#include "tns_outbuf_back.c"
+
+static void* tns_parse(const char *data, size_t len, char **remain)
 {
   void *val = NULL;
   char *valstr = NULL;
   tns_type_tag type = tns_tag_null;
   size_t vallen = 0;
 
-  //  Read the length of the value, and verify that is ends in a colon.
+  //  Read the length of the value, and verify that it ends in a colon.
   vallen = strtol(data, &valstr, 10);
   check(valstr != data, "Not a tnetstring: no length prefix.");
   check((valstr+vallen+1) < (data+len), "Not a tnetstring: bad length prefix.");
@@ -94,8 +110,7 @@ error:
 }
 
 
-static char*
-tns_render(void *val, size_t *len)
+static char* tns_render(void *val, size_t *len)
 {
   tns_outbuf outbuf;
 
@@ -121,7 +136,7 @@ static int tns_render_value(void *val, tns_outbuf *outbuf)
   check(type != 0, "type not serializable.");
 
   tns_outbuf_putc(outbuf,type);
-  orig_size = outbuf->used_size;
+  orig_size = tns_outbuf_size(outbuf);
 
   //  Render it into the output buffer, leaving space for the
   //  type tag at the end.
@@ -156,18 +171,10 @@ error:
 }
 
 
-#define tns_rotate_buffer(data, remain, len, orig_len) {\
-        len = len - (remain - data);\
-        check(len < orig_len, "Error parsing data, buffer math is off.");\
-        data = remain;\
-}
-
-
 static int tns_parse_list(void *val, const char *data, size_t len)
 {
   void *item = NULL;
   char *remain = NULL;
-  size_t orig_len = len;
 
   assert(value != NULL && "value cannot be NULL");
   assert(data != NULL && "data cannot be NULL");
@@ -175,7 +182,8 @@ static int tns_parse_list(void *val, const char *data, size_t len)
   while(len > 0) {
       item = tns_parse(data, len, &remain);
       check(item != NULL, "Failed to parse list.");
-      tns_rotate_buffer(data, remain, len, orig_len);
+      len = len - (remain - data);
+      data = remain;
       check(tns_add_to_list(val, item) != -1,
             "Failed to add item to list.");
       item = NULL;
@@ -196,19 +204,20 @@ static int tns_parse_dict(void *val, const char *data, size_t len)
   void *key = NULL;
   void *item = NULL;
   char *remain = NULL;
-  size_t orig_len = len;
 
-  assert(value != NULL && "value cannot be NULL");
+  assert(val != NULL && "value cannot be NULL");
   assert(data != NULL && "data cannot be NULL");
 
   while(len > 0) {
       key = tns_parse(data, len, &remain);
       check(key != NULL, "Failed to parse dict key from tnetstring.");
-      tns_rotate_buffer(data, remain, len, orig_len);
+      len = len - (remain - data);
+      data = remain;
 
       item = tns_parse(data, len, &remain);
       check(item != NULL, "Failed to parse dict item from tnetstring.");
-      tns_rotate_buffer(data, remain, len, orig_len);
+      len = len - (remain - data);
+      data = remain;
 
       check(tns_add_to_dict(val,key,item) != -1,
             "Failed to add element to dict.");

@@ -98,7 +98,7 @@ _tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds)
   }
 
   Py_DECREF(object);
-  string = PyString_FromStringAndSize(NULL,outbuf.used_size);
+  string = PyString_FromStringAndSize(NULL,tns_outbuf_size(&outbuf));
   if(string == NULL) {
       return NULL;
   }

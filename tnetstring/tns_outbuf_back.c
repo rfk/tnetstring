@@ -1,5 +1,25 @@
+//
+//  tns_outbuf_back:  tns_outbuf implemented by writing from back of buffer.
+//
+//  This outbuf implementation writes data starting at the back of the
+//  allocated buffer.  To finalize it you need to memmove it to the start
+//  of the buffer so it can be treated like an ordinary malloced string.
+//
+//  The advantage of this scheme is that the data is the right way round,
+//  so you can shuffle it about using memmove.  The disadvantage is that
+//  reallocating the buffer is tricker as you must move the data by hand.
+//
 
-#include "tns_core.h"
+struct tns_outbuf_s {
+  char *buffer;
+  char *head;
+  size_t alloc_size;
+};
+
+static inline size_t tns_outbuf_size(tns_outbuf *outbuf)
+{
+  return outbuf->alloc_size - (outbuf->head - outbuf->buffer);
+}
 
 static inline int tns_outbuf_itoa(tns_outbuf *outbuf, size_t n)
 {
@@ -21,13 +41,13 @@ static inline int tns_outbuf_init(tns_outbuf *outbuf)
   outbuf->buffer = malloc(64);
   check_mem(outbuf->buffer);
 
+  outbuf->head = outbuf->buffer + 64;
   outbuf->alloc_size = 64;
-  outbuf->used_size = 0;
   return 0;
 
 error:
+  outbuf->head = NULL;
   outbuf->alloc_size = 0;
-  outbuf->used_size = 0;
   return -1;
 }
 
@@ -37,24 +57,33 @@ static inline void tns_outbuf_free(tns_outbuf *outbuf)
   if(outbuf) {
       free(outbuf->buffer);
       outbuf->buffer = NULL;
+      outbuf->head = 0;
       outbuf->alloc_size = 0;
-      outbuf->used_size = 0;
   }
 }
 
 
-static inline int tns_outbuf_extend(tns_outbuf *outbuf)
+static inline int tns_outbuf_extend(tns_outbuf *outbuf, size_t free_size)
 {
   char *new_buf = NULL;
+  char *new_head = NULL;
   size_t new_size = outbuf->alloc_size * 2;
+  size_t used_size;
+
+  used_size = tns_outbuf_size(outbuf);
+
+  while(new_size < free_size + used_size) {
+      new_size = new_size * 2;
+  }
 
   new_buf = malloc(new_size);
   check_mem(new_buf);
-  memmove(new_buf + new_size - outbuf->used_size,
-          outbuf->buffer + outbuf->alloc_size - outbuf->used_size,
-          outbuf->used_size);
+ 
+  new_head = new_buf + new_size - used_size;
+  memmove(new_head, outbuf->head, used_size);
 
   outbuf->buffer = new_buf;
+  outbuf->head = new_head;
   outbuf->alloc_size = new_size;
 
   return 0;
@@ -66,11 +95,11 @@ error:
 
 static inline int tns_outbuf_putc(tns_outbuf *outbuf, char c)
 {
-  if(outbuf->alloc_size == outbuf->used_size) {
-      check(tns_outbuf_extend(outbuf) != -1, "Failed to extend buffer");
+  if(outbuf->buffer == outbuf->head) {
+      check(tns_outbuf_extend(outbuf, 1) != -1, "Failed to extend buffer");
   }
 
-  outbuf->buffer[outbuf->alloc_size - ++outbuf->used_size] = c;
+  *(--outbuf->head) = c;
 
   return 0;
 
@@ -81,14 +110,12 @@ error:
 
 static int tns_outbuf_puts(tns_outbuf *outbuf, const char *data, size_t len)
 {
-  while(outbuf->alloc_size - outbuf->used_size < len) {
-      check(tns_outbuf_extend(outbuf) != -1, "Failed to extend buffer");
+  if(outbuf->head - outbuf->buffer < len) {
+      check(tns_outbuf_extend(outbuf, len) != -1, "Failed to extend buffer");
   }
 
-  memmove(outbuf->buffer + outbuf->alloc_size - outbuf->used_size - len,
-          data, len);
-
-  outbuf->used_size += len;
+  outbuf->head -= len;
+  memmove(outbuf->head, data, len);
 
   return 0;
 
@@ -99,21 +126,22 @@ error:
 static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len)
 {
   char *new_buf = NULL;
+  size_t used_size;
 
-  memmove(outbuf->buffer,
-          outbuf->buffer + outbuf->alloc_size - outbuf->used_size,
-          outbuf->used_size);
+  used_size = tns_outbuf_size(outbuf);
+
+  memmove(outbuf->buffer, outbuf->head, used_size);
 
   if(len != NULL) {
-      *len = outbuf->used_size;
+      *len = used_size;
   } else {
-      if(outbuf->alloc_size == outbuf->used_size) {
+      if(outbuf->head == outbuf->buffer) {
           new_buf = realloc(outbuf->buffer, outbuf->alloc_size*2);
           check_mem(new_buf);
           outbuf->buffer = new_buf;
           outbuf->alloc_size = outbuf->alloc_size * 2;
       }
-      outbuf->buffer[outbuf->used_size++] = '\0';
+      outbuf->buffer[used_size] = '\0';
   }
 
   return outbuf->buffer;
@@ -121,13 +149,14 @@ static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len)
 error:
   free(outbuf->buffer);
   outbuf->buffer = NULL;
+  outbuf->alloc_size = 0;
   return NULL;
 }
 
 
 static inline int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size)
 {
-    size_t datalen = outbuf->used_size - orig_size;
+    size_t datalen = tns_outbuf_size(outbuf) - orig_size;
 
     check(tns_outbuf_putc(outbuf, ':') != -1, "Failed to clamp outbuf");
     check(tns_outbuf_itoa(outbuf, datalen) != -1, "Failed to clamp outbuf");
@@ -141,8 +170,6 @@ error:
 
 static inline void tns_outbuf_memmove(tns_outbuf *outbuf, char *dest)
 {
-  memmove(dest,
-          outbuf->buffer + outbuf->alloc_size - outbuf->used_size,
-          outbuf->used_size);
+  memmove(dest, outbuf->head, tns_outbuf_size(outbuf));
 }
 
