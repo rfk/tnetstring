@@ -14,10 +14,9 @@ static PyObject *_tnetstring_Error;
 static PyObject *_tnetstring_LoadError;
 static PyObject *_tnetstring_DumpError;
 
+
 #include "tns_core.c"
 
-
-FILE * LOG_FILE = NULL;
 
 static PyObject*
 _tnetstring_loads(PyObject* self, PyObject *args) 
@@ -144,8 +143,6 @@ PyMODINIT_FUNC
 init_tnetstring(void)
 {
   PyObject *m;
-
-  LOG_FILE = stderr;
 
   m = Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
   if(m == NULL) {
