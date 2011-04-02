@@ -27,8 +27,13 @@ static int tns_outbuf_puts(tns_outbuf *outbuf, const char *data, size_t len);
 static int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size);
 static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len);
 static void tns_outbuf_free(tns_outbuf *outbuf);
+static size_t tns_strtosz(const char *data, size_t len, size_t *sz, char **end);
 
 #include "tns_outbuf_back.c"
+
+#define STR_EQ_TRUE(s) (s[0]=='t' && s[1]=='r' && s[2]=='u' && s[3]=='e')
+#define STR_EQ_FALSE(s) (s[0]=='f' && s[1]=='a' && s[2]=='l' \
+                                   && s[3]=='s' && s[4] == 'e')
 
 static void* tns_parse(const char *data, size_t len, char **remain)
 {
@@ -38,11 +43,12 @@ static void* tns_parse(const char *data, size_t len, char **remain)
   size_t vallen = 0;
 
   //  Read the length of the value, and verify that it ends in a colon.
-  vallen = strtol(data, &valstr, 10);
-  check(valstr != data, "Not a tnetstring: no length prefix.");
-  check((valstr+vallen+1) < (data+len), "Not a tnetstring: bad length prefix.");
-  check(*valstr == ':', "Not a tnetstring: bad length prefix.");
+  check(tns_strtosz(data, len, &vallen, &valstr) != -1,
+        "Not a tnetstring: invalid length prefix.");
+  check(*valstr == ':', "Not a tnetstring: invalid length prefix.");
   valstr++;
+  check((valstr+vallen) < (data+len),
+        "Not a tnetstring: invalid length prefix.");
 
   //  Grab the type tag from the end of the value.
   type = valstr[vallen];
@@ -68,9 +74,9 @@ static void* tns_parse(const char *data, size_t len, char **remain)
     //  Primitive type: a boolean.
     //  The only acceptable values are "true" and "false".
     case tns_tag_bool:
-        if(vallen == 4 && strncmp(valstr,"true",4) == 0) {
+        if(vallen == 4 && STR_EQ_TRUE(valstr)) {
             val = tns_get_true();
-        } else if(vallen == 5 && strncmp(valstr,"false",5) == 0) {
+        } else if(vallen == 5 && STR_EQ_FALSE(valstr)) {
             val = tns_get_false();
         } else {
             sentinel("Not a tnetstring: invalid boolean literal.");
@@ -108,6 +114,9 @@ error:
   tns_free_value(val);
   return NULL;
 }
+
+#undef STR_EQ_TRUE
+#undef STR_EQ_FALSE
 
 
 static char* tns_render(void *val, size_t *len)
@@ -238,4 +247,38 @@ error:
   return -1;
 }
 
+
+
+static inline size_t
+tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
+{
+  char *pos, *eod, c;
+  size_t value = 0;
+
+  pos = data;
+  eod = data + len;
+
+  //  The first character must be a digit.
+  c = *pos;
+  if(c < '0' || c > '9') {
+      return -1;
+  }
+  value = c - '0';
+  pos++;
+
+  //  Consume all other digits.
+  while(pos < eod) {
+      c = *pos;
+      if(c < '0' || c > '9') {
+          *sz = value;
+          *end = pos;
+          return 0;
+      }
+      value = (value * 10) + (c - '0');
+      pos++;
+  }
+
+  // If we consume the entire string, that's an error.
+  return -1;
+}
 
