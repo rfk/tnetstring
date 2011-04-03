@@ -3,7 +3,6 @@ import sys
 import random
 
 import cjson
-import yajl
 import ujson
 import tnetstring
 import marshal
@@ -15,7 +14,6 @@ def add_test(v):
     #  These modules have a few round-tripping problems...
     try:
         assert cjson.decode(cjson.encode(v)) == v
-        assert yajl.loads(yajl.dumps(v)) == v
         assert ujson.loads(ujson.dumps(v)) == v
     except Exception:
         pass
@@ -65,15 +63,6 @@ def thrash_cjson():
         else:
             assert cjson.decode(cjson.encode(obj)) == obj
 
-def thrash_yajl():
-    for obj, tns, json, msh in TESTS:
-        if TEST_DUMP_ONLY:
-            yajl.dumps(obj)
-        elif TEST_LOAD_ONLY:
-            assert yajl.loads(json) == obj
-        else:
-            assert yajl.loads(yajl.dumps(obj)) == obj
-
 def thrash_ujson():
     for obj, tns, json, msh in TESTS:
         if TEST_DUMP_ONLY:
@@ -106,22 +95,16 @@ if __name__ == "__main__":
     print "cjson:", t2
     print "speedup: ", round((t2 - t1) / (t2) * 100,2), "%"
 
-    t3 = timeit.Timer("thrash_yajl()",
-                      "from shootout import thrash_yajl")
+    t3 = timeit.Timer("thrash_ujson()",
+                      "from shootout import thrash_ujson")
     t3 = min(t3.repeat(number=10000))
-    print "yajl:", t3
+    print "ujson:", t3
     print "speedup: ", round((t3 - t1) / (t3) * 100,2), "%"
 
-    t4 = timeit.Timer("thrash_ujson()",
-                      "from shootout import thrash_ujson")
-    t4 = min(t4.repeat(number=10000))
-    print "ujson:", t4
-    print "speedup: ", round((t4 - t1) / (t4) * 100,2), "%"
-
-    t5 = timeit.Timer("thrash_marshal()",
+    t4 = timeit.Timer("thrash_marshal()",
                       "from shootout import thrash_marshal")
-    t5 = min(t5.repeat(number=10000))
-    print "marshal:", t5
-    print "speedup: ", round((t5 - t1) / (t5) * 100,2), "%"
+    t4 = min(t4.repeat(number=10000))
+    print "marshal:", t4
+    print "speedup: ", round((t4 - t1) / (t4) * 100,2), "%"
 
 
