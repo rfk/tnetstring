@@ -8,6 +8,8 @@
 //  The advantage of this scheme is that the data is the right way round,
 //  so you can shuffle it about using memmove.  The disadvantage is that
 //  reallocating the buffer is tricker as you must move the data by hand.
+//  On my machines, the ability to use memmove seems to be a very slight
+//  win over tns_outbuf_rev.c.
 //
 
 struct tns_outbuf_s {

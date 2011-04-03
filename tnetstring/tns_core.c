@@ -35,9 +35,12 @@ static size_t tns_strtosz(const char *data, size_t len, size_t *sz, char **end);
 
 #include "tns_outbuf_back.c"
 
+//  This appears to be faster than using strncmp to compare
+//  against a small string constant.
 #define STR_EQ_TRUE(s) (s[0]=='t' && s[1]=='r' && s[2]=='u' && s[3]=='e')
 #define STR_EQ_FALSE(s) (s[0]=='f' && s[1]=='a' && s[2]=='l' \
                                    && s[3]=='s' && s[4] == 'e')
+
 
 static void* tns_parse(const char *data, size_t len, char **remain)
 {
@@ -282,7 +285,7 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
   pos++;
 
   //  The netstring spec explicitly forbits padding zeros.
-  //  If it's a zero, we must be at end.
+  //  If it's a zero, it must be the only char in the string.
   if(value == 0) {
       *sz = value;
       *end = (char*) pos;
