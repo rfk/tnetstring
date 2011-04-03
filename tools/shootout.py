@@ -5,6 +5,7 @@ import cjson
 import yajl
 import ujson
 import tnetstring
+import marshal
 
 from tnetstring.tests.test_format import FORMAT_EXAMPLES, get_random_object
 
@@ -18,7 +19,7 @@ def add_test(v):
     except Exception:
         pass
     else:
-        TESTS.append((v,tnetstring.dumps(v),cjson.encode(v)))
+        TESTS.append((v,tnetstring.dumps(v),cjson.encode(v),marshal.dumps(v)))
 
 for (k,v) in FORMAT_EXAMPLES.iteritems():
     add_test(v)
@@ -27,28 +28,34 @@ for _ in xrange(20):
     add_test(v)
 
 def thrash_tnetstring():
-    for obj, tns, json in TESTS:
-        tnetstring.dumps(obj)
+    for obj, tns, json, msh in TESTS:
+#        tnetstring.dumps(obj)
         assert tnetstring.loads(tns) == obj
-        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
+#        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
 
 def thrash_cjson():
-    for obj, tns, json in TESTS:
-        cjson.encode(obj)
+    for obj, tns, json, msh in TESTS:
+#        cjson.encode(obj)
         assert cjson.decode(json) == obj
-        assert cjson.decode(cjson.encode(obj)) == obj
+#        assert cjson.decode(cjson.encode(obj)) == obj
 
 def thrash_yajl():
-    for obj, tns, json in TESTS:
-        yajl.dumps(obj)
+    for obj, tns, json, msh in TESTS:
+#        yajl.dumps(obj)
         assert yajl.loads(json) == obj
-        assert yajl.loads(yajl.dumps(obj)) == obj
+#        assert yajl.loads(yajl.dumps(obj)) == obj
 
 def thrash_ujson():
-    for obj, tns, json in TESTS:
-        ujson.dumps(obj)
+    for obj, tns, json, msh in TESTS:
+#        ujson.dumps(obj)
         assert ujson.loads(json) == obj
-        assert ujson.loads(ujson.dumps(obj)) == obj
+#        assert ujson.loads(ujson.dumps(obj)) == obj
+
+def thrash_marshal():
+    for obj, tns, json, msh in TESTS:
+#        marshal.dumps(obj)
+        assert marshal.loads(msh) == obj
+#        assert marshal.loads(marshal.dumps(obj)) == obj
 
 
 if __name__ == "__main__":
@@ -75,5 +82,11 @@ if __name__ == "__main__":
     t4 = min(t4.repeat(number=10000))
     print "ujson:", t4
     print "speedup: ", round((t4 - t1) / (t4) * 100,2), "%"
+
+    t5 = timeit.Timer("thrash_marshal()",
+                      "from shootout import thrash_marshal")
+    t5 = min(t5.repeat(number=10000))
+    print "marshal:", t5
+    print "speedup: ", round((t5 - t1) / (t5) * 100,2), "%"
 
 
