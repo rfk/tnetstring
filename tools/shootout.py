@@ -1,4 +1,5 @@
 
+import sys
 import random
 
 import cjson
@@ -21,41 +22,75 @@ def add_test(v):
     else:
         TESTS.append((v,tnetstring.dumps(v),cjson.encode(v),marshal.dumps(v)))
 
+#  Test it on all our format examples.
 for (k,v) in FORMAT_EXAMPLES.iteritems():
     add_test(v)
+
+#  And on some randomly-generated objects.
+#  Use a fixed random seed for consistency.
+r = random.Random(7)
 for _ in xrange(20):
-    v = get_random_object(random.Random(0),jsonsafe=True)
+    v = get_random_object(r,jsonsafe=True)
     add_test(v)
+
+
+TEST_DUMP_ONLY = False
+TEST_LOAD_ONLY = False
+if len(sys.argv) >1 :
+    if sys.argv[1] == "dumps":
+        TEST_DUMP_ONLY = True
+    elif sys.argv[1] == "loads":
+        TEST_LOAD_ONLY = True
+    elif sys.argv[1] == "roundtrip":
+        pass
+    else:
+        raise ValueError("unknown test type: " + sys.argv[1])
+
 
 def thrash_tnetstring():
     for obj, tns, json, msh in TESTS:
-        tnetstring.dumps(obj)
-        assert tnetstring.loads(tns) == obj
-        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
+        if TEST_DUMP_ONLY:
+            tnetstring.dumps(obj)
+        elif TEST_LOAD_ONLY:
+            assert tnetstring.loads(tns) == obj
+        else:
+            assert tnetstring.loads(tnetstring.dumps(obj)) == obj
 
 def thrash_cjson():
     for obj, tns, json, msh in TESTS:
-        cjson.encode(obj)
-        assert cjson.decode(json) == obj
-        assert cjson.decode(cjson.encode(obj)) == obj
+        if TEST_DUMP_ONLY:
+            cjson.encode(obj)
+        elif TEST_LOAD_ONLY:
+            assert cjson.decode(json) == obj
+        else:
+            assert cjson.decode(cjson.encode(obj)) == obj
 
 def thrash_yajl():
     for obj, tns, json, msh in TESTS:
-        yajl.dumps(obj)
-        assert yajl.loads(json) == obj
-        assert yajl.loads(yajl.dumps(obj)) == obj
+        if TEST_DUMP_ONLY:
+            yajl.dumps(obj)
+        elif TEST_LOAD_ONLY:
+            assert yajl.loads(json) == obj
+        else:
+            assert yajl.loads(yajl.dumps(obj)) == obj
 
 def thrash_ujson():
     for obj, tns, json, msh in TESTS:
-        ujson.dumps(obj)
-        assert ujson.loads(json) == obj
-        assert ujson.loads(ujson.dumps(obj)) == obj
+        if TEST_DUMP_ONLY:
+            ujson.dumps(obj)
+        elif TEST_LOAD_ONLY:
+            assert ujson.loads(json) == obj
+        else:
+            assert ujson.loads(ujson.dumps(obj)) == obj
 
 def thrash_marshal():
     for obj, tns, json, msh in TESTS:
-        marshal.dumps(obj)
-        assert marshal.loads(msh) == obj
-        assert marshal.loads(marshal.dumps(obj)) == obj
+        if TEST_DUMP_ONLY:
+            marshal.dumps(obj)
+        elif TEST_LOAD_ONLY:
+            assert marshal.loads(msh) == obj
+        else:
+            assert marshal.loads(marshal.dumps(obj)) == obj
 
 
 if __name__ == "__main__":

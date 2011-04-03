@@ -43,7 +43,7 @@ def get_random_object(random=random,depth=0,jsonsafe=False):
             for _ in xrange(n):
                #  JSON only supports string keys.
                if jsonsafe:
-                   n = random.randint(0,200)
+                   n = random.randint(0,100)
                    k = "".join(chr(random.randint(32,126)) for _ in xrange(n))
                else:
                    k = get_random_object(random,10,jsonsafe)
@@ -59,10 +59,10 @@ def get_random_object(random=random,depth=0,jsonsafe=False):
             return False
         if what == 3:
             return random.randint(0,sys.maxint)
-        #  cjson can't reliably round-trip floats bytes.
+        #  cjson can't reliably round-trip floats.
         if what == 4 and not jsonsafe:
             return random.randint(0,sys.maxint)*1.0/random.randint(0,sys.maxint)
-        n = random.randint(0,200)
+        n = random.randint(0,100)
         #  cjson can't reliably round-trip non-printable bytes.
         if jsonsafe:
             return "".join(chr(random.randint(32,126)) for _ in xrange(n))
