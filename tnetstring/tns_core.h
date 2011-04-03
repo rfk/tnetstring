@@ -75,6 +75,11 @@ static void tns_free_value(void *value);
 //  receive the unparsed remainder of the string.
 static void* tns_parse(const char *data, size_t len, char** remain);
 
+//  If you need to read the length prefix yourself, e.g. because you're
+//  reading data off a socket, you can use this function to get just
+//  the payload parsing logic.
+static void* tns_parse_payload(tns_type_tag type, const char *data, size_t len);
+
 //  Render an object into a string.
 //  On success this function returns a malloced string containing
 //  the serialization of the given object.  The second argument

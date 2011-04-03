@@ -5,6 +5,7 @@
 //
 //    dumps:  dump a python object to a tnetstring
 //    loads:  parse tnetstring into a python object
+//    load:   parse tnetstring from a file-like object
 //    pop:    parse tnetstring into a python object,
 //            return it along with unparsed data.
 
@@ -43,6 +44,118 @@ _tnetstring_loads(PyObject* self, PyObject *args)
   }
 
   return val;
+}
+
+
+static PyObject*
+_tnetstring_load(PyObject* self, PyObject *args) 
+{
+  PyObject *val = NULL;
+  PyObject *file = NULL;
+  PyObject *methnm = NULL;
+  PyObject *metharg = NULL;
+  PyObject *res = NULL;
+  char c, *data;
+  size_t datalen = 0;
+
+  //  Grab file-like object as only argument
+  if(!PyArg_UnpackTuple(args, "load", 1, 1, &file)) {
+      goto error;
+  }
+  Py_INCREF(file);
+
+  //  We're going to read one char at a time
+  if((methnm = PyString_FromString("read")) == NULL) {
+      goto error;
+  }
+  if((metharg = PyInt_FromLong(1)) == NULL) {
+      goto error;
+  }
+
+  //  Read the length prefix one char at a time
+  res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
+  if(res == NULL) {
+      goto error;
+  }
+  Py_INCREF(res);
+  if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
+      PyErr_SetString(_tnetstring_Error,
+                      "Not a tnetstring: invlaid or missing length prefix");
+      goto error;
+  }
+  c = PyString_AS_STRING(res)[0];
+  Py_DECREF(res); res = NULL;
+  if(c < '0' || c > '9') {
+      PyErr_SetString(_tnetstring_Error,
+                      "Not a tnetstring: invlaid or missing length prefix");
+      goto error;
+  }
+  do {
+      datalen = (10 * datalen) + (c - '0');
+      res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
+      if(res == NULL) {
+          goto error;
+      }
+      Py_INCREF(res);
+      if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
+          PyErr_SetString(_tnetstring_Error,
+                          "Not a tnetstring: invlaid or missing length prefix");
+          goto error;
+      }
+      c = PyString_AS_STRING(res)[0];
+      Py_DECREF(res); res = NULL;
+  } while(c >= '0' && c <= '9');
+
+  //  Validate end-of-length-prefix marker.
+  if(c != ':') {
+      PyErr_SetString(_tnetstring_Error,
+                      "Not a tnetstring: missing length prefix");
+      goto error;
+  }
+  
+  //  Read the data plus terminating type tag.
+  Py_DECREF(metharg);
+  if((metharg = PyInt_FromSize_t(datalen + 1)) == NULL) {
+      goto error;
+  } 
+  res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
+  if(res == NULL) {
+      goto error;
+  }
+  Py_INCREF(res);
+  Py_DECREF(file); file = NULL;
+  Py_DECREF(methnm); methnm = NULL;
+  Py_DECREF(metharg); metharg = NULL;
+  if(!PyString_Check(res) || PyString_GET_SIZE(res) != datalen + 1) {
+      PyErr_SetString(_tnetstring_Error,
+                      "Not a tnetstring: invalid length prefix");
+      goto error;
+  }
+
+  //  Parse out the payload object
+  data = PyString_AS_STRING(res);
+  val = tns_parse_payload(data[datalen], data, datalen);
+  Py_DECREF(res); res = NULL;
+
+  return val;
+
+error:
+  if(file != NULL) {
+      Py_DECREF(file);
+  }
+  if(methnm != NULL) {
+      Py_DECREF(methnm);
+  }
+  if(metharg != NULL) {
+      Py_DECREF(metharg);
+  }
+  if(res != NULL) {
+      Py_DECREF(res);
+  }
+  if(val != NULL) {
+      Py_DECREF(val);
+  }
+  return NULL;
 }
 
 
@@ -110,6 +223,13 @@ _tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds)
 
 
 static PyMethodDef _tnetstring_methods[] = {
+    {"load",
+     (PyCFunction)_tnetstring_load,
+     METH_VARARGS,
+     PyDoc_STR("load(file) -> object\n"
+               "This function reads a tnetstring from a file and parses it\n"
+               " into a python object.")},
+
     {"loads",
      (PyCFunction)_tnetstring_loads,
      METH_VARARGS,

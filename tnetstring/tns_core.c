@@ -37,7 +37,6 @@ static size_t tns_strtosz(const char *data, size_t len, size_t *sz, char **end);
 
 static void* tns_parse(const char *data, size_t len, char **remain)
 {
-  void *val = NULL;
   char *valstr = NULL;
   tns_type_tag type = tns_tag_null;
   size_t vallen = 0;
@@ -59,24 +58,35 @@ static void* tns_parse(const char *data, size_t len, char **remain)
   }
 
   //  Now dispatch type parsing based on the type tag.
+  return tns_parse_payload(type, valstr, vallen);
+
+error:
+  return NULL;
+}
+
+
+static void* tns_parse_payload(tns_type_tag type, const char *data, size_t len)
+{
+  void *val = NULL;
+
   switch(type) {
     //  Primitive type: a string blob.
     case tns_tag_string:
-        val = tns_parse_string(valstr, vallen);
+        val = tns_parse_string(data, len);
         check(val != NULL, "Not a tnetstring: invalid string literal.");
         break;
     //  Primitive type: a number.
     //  I'm branching out here and allowing both floats and ints.
     case tns_tag_number:
-        val = tns_parse_number(valstr, vallen);
+        val = tns_parse_number(data, len);
         check(val != NULL, "Not a tnetstring: invalid number literal.");
         break;
     //  Primitive type: a boolean.
     //  The only acceptable values are "true" and "false".
     case tns_tag_bool:
-        if(vallen == 4 && STR_EQ_TRUE(valstr)) {
+        if(len == 4 && STR_EQ_TRUE(data)) {
             val = tns_get_true();
-        } else if(vallen == 5 && STR_EQ_FALSE(valstr)) {
+        } else if(len == 5 && STR_EQ_FALSE(data)) {
             val = tns_get_false();
         } else {
             sentinel("Not a tnetstring: invalid boolean literal.");
@@ -86,21 +96,21 @@ static void* tns_parse(const char *data, size_t len, char **remain)
     //  Primitive type: a null.
     //  This must be a zero-length string.
     case tns_tag_null:
-        check(vallen == 0, "Not a tnetstring: invalid null literal");
+        check(len == 0, "Not a tnetstring: invalid null literal");
         val = tns_get_null();
         break;
     //  Compound type: a dict.
     //  The data is written <key><value><key><value>
     case tns_tag_dict:
         val = tns_new_dict();
-        check(tns_parse_dict(val,valstr,vallen) != -1,
+        check(tns_parse_dict(val,data,len) != -1,
               "Not a tnetstring: broken dict items.");
         break;
     //  Compound type: a list.
     //  The data is written <item><item><item>
     case tns_tag_list:
         val = tns_new_list();
-        check(tns_parse_list(val,valstr,vallen) != -1,
+        check(tns_parse_list(val,data,len) != -1,
               "Not a tnetstring: broken list items.");
         break;
     //  Whoops, that ain't a tnetstring.
@@ -252,7 +262,8 @@ error:
 static inline size_t
 tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
 {
-  char *pos, *eod, c;
+  char c;
+  const char *pos, *eod;
   size_t value = 0;
 
   pos = data;
@@ -271,7 +282,7 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
       c = *pos;
       if(c < '0' || c > '9') {
           *sz = value;
-          *end = pos;
+          *end = (char*) pos;
           return 0;
       }
       value = (value * 10) + (c - '0');

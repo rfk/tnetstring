@@ -7,7 +7,7 @@ tnetstring:  data serialization using typed netstrings
 This is a data serialization library. It's a lot like JSON but it uses a
 new syntax called "typed netstrings" that Zed has proposed for use in the
 Mongrel2 webserver.  It's designed to be simpler and easier to implement
-than JSON, with a happy consequence of also being faster.
+than JSON, with a happy consequence of also being faster in many cases.
 
 An ordinary netstring is a blob of data prefixed with its length and postfixed
 with a sanity-checking comma.  The string "hello world" encodes like this::
@@ -37,6 +37,6 @@ When I get around to it, I will also add the following:
 
 Note that since parsing a tnetstring requires reading all the data into memory
 at once, there's no efficiency gain from using the file-based versions of these
-functions; I'm only planning to add them for API compatability with other
-serialization modules e.g. pickle and json.
+functions.  They're only here so you can use load() to read precisely one
+item from a file or socket without consuming any extra data.
 

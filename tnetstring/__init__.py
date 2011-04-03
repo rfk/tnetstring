@@ -7,7 +7,7 @@ tnetstring:  data serialization using typed netstrings
 This is a data serialization library. It's a lot like JSON but it uses a
 new syntax called "typed netstrings" that Zed has proposed for use in the
 Mongrel2 webserver.  It's designed to be simpler and easier to implement
-than JSON, with a happy consequence of also being faster.
+than JSON, with a happy consequence of also being faster in many cases.
 
 An ordinary netstring is a blob of data prefixed with its length and postfixed
 with a sanity-checking comma.  The string "hello world" encodes like this::
@@ -37,8 +37,8 @@ When I get around to it, I will also add the following:
 
 Note that since parsing a tnetstring requires reading all the data into memory
 at once, there's no efficiency gain from using the file-based versions of these
-functions; I'm only planning to add them for API compatability with other
-serialization modules e.g. pickle and json.
+functions.  They're only here so you can use load() to read precisely one
+item from a file or socket without consuming any extra data.
 
 """
 
@@ -50,12 +50,6 @@ __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,__ver_patch__,__ver_su
 
 
 from collections import deque
-
-
-try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
 
 
 class Error(Exception):
@@ -77,75 +71,24 @@ def dumps(value):
 
     This function dumps a python object as a tnetstring.
     """
-    #  This uses the naive bottom-up generator, it's quite slow.
-    #return "".join(_gdumps(value))
-    #  This uses the write-in-reverse trick from the C version.
-    #  It's faster, but loses a lot in reversing the python strings.
-    #s = StringIO()
-    #_rdumps(s,value)
-    #return s.getvalue()[::-1]
-    #  This uses a deque to collect output fragments in reverse order.
-    #  It's slightly faster than the _rdumps version as the strings
-    #  don't need to be reversed when outputting them.
+    #  This uses a deque to collect output fragments in reverse order,
+    #  then joins them together at the end.  It's measurably faster
+    #  than creating all the intermediate strings.
+    #  If you're reading this to get a handle on the tnetstring format,
+    #  consider the _gdumps() function instead; it's a standard top-down
+    #  generator that's simpler to understand but much less efficient.
     q = deque()
     _rdumpq(q,0,value)
     return "".join(q)
 
 
-def _rdumps(s,value):
-    """Dump value as a tnetstring, to a StringIO instance, in reverse.
+def dump(value, file):
+    """dump(object, file)
 
-    This function writes out the tnetstring representation of the given value
-    to the given StringIO instance, in reverse.  Yes, in reverse.
-
-    Writing in reverse makes it easier to calculate all the length prefixes
-    without building every little intermediate string.  Unfortunately it means
-    we have to reverse the string for each literal, but it pays off compared
-    to the naive version.
+    This function dumps a python object as a tnetstring and writes it to
+    the given file.
     """
-    write = s.write
-    if value is None:
-        write("~:0")
-    elif value is True:
-        write("!eurt:4")
-    elif value is False:
-        write("!eslaf:5")
-    elif isinstance(value,(int,long)):
-        data = str(value) 
-        write("#")
-        write(data[::-1])
-        write(":")
-        write(str(len(data))[::-1])
-    elif isinstance(value,(float,)):
-        data = repr(value) 
-        write("#")
-        write(data[::-1])
-        write(":")
-        write(str(len(data))[::-1])
-    elif isinstance(value,(str,)):
-        write(",")
-        write(value[::-1])
-        write(":")
-        write(str(len(value))[::-1])
-    elif isinstance(value,(list,tuple,)):
-        write("]")
-        i = s.tell()
-        for item in reversed(value):
-            _rdumps(s,item)
-        i = s.tell() - i
-        write(":")
-        write(str(i)[::-1])
-    elif isinstance(value,(dict,)):
-        write("}")
-        i = s.tell()
-        for (k,v) in value.iteritems():
-            _rdumps(s,v)
-            _rdumps(s,k)
-        i = s.tell() - i
-        write(":")
-        write(str(i)[::-1])
-    else:
-        raise DumpError("unserializable object")
+    file.write(dumps(value))
 
 
 def _rdumpq(q,size,value):
@@ -160,8 +103,8 @@ def _rdumpq(q,size,value):
 
     Operating last-chunk-first makes it easy to calculate the size written
     for recursive structures without having to build their representation as
-    a string.  This is measurably faster than the _rdumps version because
-    it avoid having to reverse lots of strings.
+    a string.  This is measurably faster than generating the intermediate
+    strings, especially on deeply nested structures.
     """
     write = q.appendleft
     if value is None:
@@ -183,6 +126,10 @@ def _rdumpq(q,size,value):
         write(span)
         return size + 2 + len(span) + ldata
     elif isinstance(value,(float,)):
+        #  Use repr() for float rather than str().
+        #  It round-trips more accurately.
+        #  Probably unnecessary in later python versions that
+        #  use David Gay's ftoa routines.
         data = repr(value) 
         ldata = len(data)
         span = str(ldata)
@@ -201,20 +148,20 @@ def _rdumpq(q,size,value):
         return size + 2 + len(span) + lvalue
     elif isinstance(value,(list,tuple,)):
         write("]")
-        i = size = size + 1
+        init_size = size = size + 1
         for item in reversed(value):
             size = _rdumpq(q,size,item)
-        span = str(size - i)
+        span = str(size - init_size)
         write(":")
         write(span)
         return size + 1 + len(span)
     elif isinstance(value,(dict,)):
         write("}")
-        i = size = size + 1
+        init_size = size = size + 1
         for (k,v) in value.iteritems():
             size = _rdumpq(q,size,v)
             size = _rdumpq(q,size,k)
-        span = str(size - i)
+        span = str(size - init_size)
         write(":")
         write(span)
         return size + 1 + len(span)
@@ -228,8 +175,8 @@ def _gdumps(value):
     This is the naive dumping algorithm, implemented as a generator so that
     it's easy to pass to "".join() without building a new list.
 
-    This is mainly here for experimentation purposes; the _rdumps and _rdumpq
-    versions are measurably faster.
+    This is mainly here for comparison purposes; the _rdumpq version is
+    measurably faster as it doesn't have to build intermediate strins.
     """
     if value is None:
         yield "0:~"
@@ -288,6 +235,72 @@ def loads(string):
     return pop(string)[0]
 
 
+def load(file):
+    """load(file) -> object
+
+    This function reads a tnetstring from a file and parses it into a
+    python object.  The file must support the read() method, and this
+    function promises not to read more data than necessary.
+    """
+    #  Read the length prefix one char at a time.
+    c = file.read(1)
+    if not c.isdigit():
+        raise LoadError("not a tnetstring: missing or invalid length prefix")
+    datalen = ord(c) - ord("0")
+    c = file.read(1)
+    while c.isdigit():
+        datalen = (10 * datalen) + (ord(c) - ord("0"))
+        c = file.read(1)
+    if c != ":":
+        raise LoadError("not a tnetstring: missing or invalid length prefix")
+    #  Now we can read and parse the payload.
+    #  This repeats the dispatch logic of pop() so we can avoid
+    #  re-constructing the outermost tnetstring.
+    data = file.read(datalen)
+    if len(data) != datalen:
+        raise LoadError("not a tnetstring: length prefix too big")
+    type = file.read(1)
+    if type == ",":
+        return data
+    if type == "#":
+        if "." in data or "e" in data or "E" in data:
+            try:
+                return float(data)
+            except ValueError:
+                raise LoadError("not a tnetstring: invalid float literal")
+        else:
+            try:
+                return int(data)
+            except ValueError:
+                raise LoadError("not a tnetstring: invalid integer literal")
+    if type == "!":
+        if data == "true":
+            return True
+        elif data == "false":
+            return False
+        else:
+            raise LoadError("not a tnetstring: invalid boolean literal")
+    if type == "~":
+        if data:
+            raise LoadError("not a tnetstring: invalid null literal")
+        return None
+    if type == "]":
+        l = []
+        while data:
+            (item,data) = pop(data)
+            l.append(item)
+        return l
+    if type == "}":
+        d = {}
+        while data:
+            (key,data) = pop(data)
+            (val,data) = pop(data)
+            d[key] = val
+        return d
+    raise LoadError("unknown type tag")
+    
+
+
 def pop(string):
     """pop(string) -> (object, remain)
 
@@ -305,7 +318,7 @@ def pop(string):
         (data,type,remain) = (rest[:dlen],rest[dlen],rest[dlen+1:])
     except IndexError:
         #  This fires if len(rest) < dlen, meaning we don't need
-        #  to validate that data is the right length.
+        #  to further validate that data is the right length.
         raise LoadError("not a tnetstring: invalid length prefix")
     #  Parse the data based on the type tag.
     if type == ",":
@@ -358,9 +371,8 @@ else:
     Error = _tnetstring.Error
     LoadError = _tnetstring.LoadError
     DumpError = _tnetstring.DumpError
-    #dump = _tnetstring.dump
     dumps = _tnetstring.dumps
-    #load = _tnetstring.load
+    load = _tnetstring.load
     loads = _tnetstring.loads
     pop = _tnetstring.pop
 
