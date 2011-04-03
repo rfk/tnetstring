@@ -29,33 +29,33 @@ for _ in xrange(20):
 
 def thrash_tnetstring():
     for obj, tns, json, msh in TESTS:
-#        tnetstring.dumps(obj)
+        tnetstring.dumps(obj)
         assert tnetstring.loads(tns) == obj
-#        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
+        assert tnetstring.loads(tnetstring.dumps(obj)) == obj
 
 def thrash_cjson():
     for obj, tns, json, msh in TESTS:
-#        cjson.encode(obj)
+        cjson.encode(obj)
         assert cjson.decode(json) == obj
-#        assert cjson.decode(cjson.encode(obj)) == obj
+        assert cjson.decode(cjson.encode(obj)) == obj
 
 def thrash_yajl():
     for obj, tns, json, msh in TESTS:
-#        yajl.dumps(obj)
+        yajl.dumps(obj)
         assert yajl.loads(json) == obj
-#        assert yajl.loads(yajl.dumps(obj)) == obj
+        assert yajl.loads(yajl.dumps(obj)) == obj
 
 def thrash_ujson():
     for obj, tns, json, msh in TESTS:
-#        ujson.dumps(obj)
+        ujson.dumps(obj)
         assert ujson.loads(json) == obj
-#        assert ujson.loads(ujson.dumps(obj)) == obj
+        assert ujson.loads(ujson.dumps(obj)) == obj
 
 def thrash_marshal():
     for obj, tns, json, msh in TESTS:
-#        marshal.dumps(obj)
+        marshal.dumps(obj)
         assert marshal.loads(msh) == obj
-#        assert marshal.loads(marshal.dumps(obj)) == obj
+        assert marshal.loads(marshal.dumps(obj)) == obj
 
 
 if __name__ == "__main__":

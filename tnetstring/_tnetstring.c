@@ -12,6 +12,7 @@
 #include <Python.h>
 
 
+#define TNS_MAX_LENGTH 999999999
 #include "tns_core.c"
 
 
@@ -81,13 +82,13 @@ _tnetstring_load(PyObject* self, PyObject *args)
   }
   c = PyString_AS_STRING(res)[0];
   Py_DECREF(res); res = NULL;
+  //  Note that the netsring spec explicitly forbids padding zeroes.
+  //  If the first char is zero, it must be the only char.
   if(c < '0' || c > '9') {
       PyErr_SetString(PyExc_ValueError,
                       "Not a tnetstring: invlaid or missing length prefix");
       goto error;
-  }
-  do {
-      datalen = (10 * datalen) + (c - '0');
+  } else if (c == '0') {
       res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
       if(res == NULL) {
           goto error;
@@ -95,12 +96,30 @@ _tnetstring_load(PyObject* self, PyObject *args)
       Py_INCREF(res);
       if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
           PyErr_SetString(PyExc_ValueError,
-                          "Not a tnetstring: invlaid or missing length prefix");
+                      "Not a tnetstring: invlaid or missing length prefix");
           goto error;
       }
       c = PyString_AS_STRING(res)[0];
       Py_DECREF(res); res = NULL;
-  } while(c >= '0' && c <= '9');
+  } else {
+      do {
+          datalen = (10 * datalen) + (c - '0');
+          check(datalen < TNS_MAX_LENGTH,
+                "Not a tnetstring: absurdly large length prefix"); 
+          res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
+          if(res == NULL) {
+              goto error;
+          }
+          Py_INCREF(res);
+          if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
+              PyErr_SetString(PyExc_ValueError,
+                        "Not a tnetstring: invlaid or missing length prefix");
+              goto error;
+          }
+          c = PyString_AS_STRING(res)[0];
+          Py_DECREF(res); res = NULL;
+      } while(c >= '0' && c <= '9');
+  }
 
   //  Validate end-of-length-prefix marker.
   if(c != ':') {

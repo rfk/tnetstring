@@ -92,18 +92,31 @@ class Test_FileLoading(unittest.TestCase):
         for data, expect in FORMAT_EXAMPLES.items():
             s = StringIO.StringIO()
             s.write(data)
+            s.write("OK")
             s.seek(0)
             self.assertEqual(expect,tnetstring.load(s))
+            self.assertEqual("OK",s.read())
             s = StringIO.StringIO()
             tnetstring.dump(expect,s)
+            s.write("OK")
             s.seek(0)
             self.assertEqual(expect,tnetstring.load(s))
+            self.assertEqual("OK",s.read())
 
     def test_roundtrip_file_random(self):
         for _ in xrange(500):
             v = get_random_object()
             s = StringIO.StringIO()
             tnetstring.dump(v,s)
+            s.write("OK")
             s.seek(0)
             self.assertEqual(v,tnetstring.load(s))
+            self.assertEqual("OK",s.read())
+
+    def test_error_on_absurd_lengths(self):
+        s = StringIO.StringIO()
+        s.write("1000000000:pwned!,")
+        s.seek(0)
+        self.assertRaises(ValueError,tnetstring.load,s)
+        self.assertEquals(s.read(1),":")
 

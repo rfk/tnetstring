@@ -18,6 +18,10 @@
 
 #include "tns_core.h"
 
+#ifndef TNS_MAX_LENGTH
+#define TNS_MAX_LENGTH 999999999
+#endif
+
 //  These are our internal-use functions.
 
 static int tns_parse_dict(void *dict, const char *data, size_t len);
@@ -276,6 +280,14 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
   }
   value = c - '0';
   pos++;
+
+  //  The netstring spec explicitly forbits padding zeros.
+  //  If it's a zero, we must be at end.
+  if(value == 0) {
+      *sz = value;
+      *end = (char*) pos;
+      return 0;
+  }
 
   //  Consume all other digits.
   while(pos < eod) {

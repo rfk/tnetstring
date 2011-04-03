@@ -225,14 +225,19 @@ def load(file):
     function promises not to read more data than necessary.
     """
     #  Read the length prefix one char at a time.
+    #  Note that the netstring spec explicitly forbids padding zeros.
     c = file.read(1)
     if not c.isdigit():
         raise ValueError("not a tnetstring: missing or invalid length prefix")
     datalen = ord(c) - ord("0")
     c = file.read(1)
-    while c.isdigit():
-        datalen = (10 * datalen) + (ord(c) - ord("0"))
-        c = file.read(1)
+    if datalen != 0:
+        while c.isdigit():
+            datalen = (10 * datalen) + (ord(c) - ord("0"))
+            if datalen > 999999999:
+                errmsg = "not a tnetstring: absurdly large length prefix"
+                raise ValueError(errmsg)
+            c = file.read(1)
     if c != ":":
         raise ValueError("not a tnetstring: missing or invalid length prefix")
     #  Now we can read and parse the payload.
