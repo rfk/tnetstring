@@ -99,7 +99,7 @@ class Test_FileLoading(unittest.TestCase):
             s.seek(0)
             self.assertEqual(expect,tnetstring.load(s))
 
-    def test_roundtrip_format_random(self):
+    def test_roundtrip_file_random(self):
         for _ in xrange(500):
             v = get_random_object()
             s = StringIO.StringIO()
