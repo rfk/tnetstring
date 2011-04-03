@@ -11,10 +11,6 @@
 
 #include <Python.h>
 
-static PyObject *_tnetstring_Error;
-static PyObject *_tnetstring_LoadError;
-static PyObject *_tnetstring_DumpError;
-
 
 #include "tns_core.c"
 
@@ -79,14 +75,14 @@ _tnetstring_load(PyObject* self, PyObject *args)
   }
   Py_INCREF(res);
   if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
-      PyErr_SetString(_tnetstring_Error,
+      PyErr_SetString(PyExc_ValueError,
                       "Not a tnetstring: invlaid or missing length prefix");
       goto error;
   }
   c = PyString_AS_STRING(res)[0];
   Py_DECREF(res); res = NULL;
   if(c < '0' || c > '9') {
-      PyErr_SetString(_tnetstring_Error,
+      PyErr_SetString(PyExc_ValueError,
                       "Not a tnetstring: invlaid or missing length prefix");
       goto error;
   }
@@ -98,7 +94,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
       }
       Py_INCREF(res);
       if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
-          PyErr_SetString(_tnetstring_Error,
+          PyErr_SetString(PyExc_ValueError,
                           "Not a tnetstring: invlaid or missing length prefix");
           goto error;
       }
@@ -108,7 +104,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
 
   //  Validate end-of-length-prefix marker.
   if(c != ':') {
-      PyErr_SetString(_tnetstring_Error,
+      PyErr_SetString(PyExc_ValueError,
                       "Not a tnetstring: missing length prefix");
       goto error;
   }
@@ -127,7 +123,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
   Py_DECREF(methnm); methnm = NULL;
   Py_DECREF(metharg); metharg = NULL;
   if(!PyString_Check(res) || PyString_GET_SIZE(res) != datalen + 1) {
-      PyErr_SetString(_tnetstring_Error,
+      PyErr_SetString(PyExc_ValueError,
                       "Not a tnetstring: invalid length prefix");
       goto error;
   }
@@ -262,51 +258,11 @@ PyDoc_STRVAR(module_doc,
 PyMODINIT_FUNC
 init_tnetstring(void)
 {
-  PyObject *m;
-
-  m = Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
-  if(m == NULL) {
-      return;
-  }
-
-  _tnetstring_Error = PyErr_NewException("_tnetstring.Error", NULL, NULL);
-  if(_tnetstring_Error == NULL) {
-      return;
-  }
-  Py_INCREF(_tnetstring_Error);
-  PyModule_AddObject(m, "Error", _tnetstring_Error);
-
-  _tnetstring_LoadError = PyErr_NewException("_tnetstring.LoadError",
-                                              _tnetstring_Error,NULL);
-  if(_tnetstring_LoadError == NULL) {
-      return;
-  }
-  Py_INCREF(_tnetstring_LoadError);
-  PyModule_AddObject(m, "LoadError", _tnetstring_LoadError);
-
-  _tnetstring_DumpError = PyErr_NewException("_tnetstring.DumpError",
-                                              _tnetstring_Error,NULL);
-  if(_tnetstring_DumpError == NULL) {
-      return;
-  }
-  Py_INCREF(_tnetstring_DumpError);
-  PyModule_AddObject(m, "DumpError", _tnetstring_DumpError);
+  Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
 }
 
 
 //  Functions to hook the parser core up to python.
-
-static inline void
-tns_parse_error(const char *errstr)
-{
-  PyErr_SetString(_tnetstring_LoadError, errstr);
-}
-
-static inline void
-tns_render_error(const char *errstr)
-{
-  PyErr_SetString(_tnetstring_DumpError, errstr);
-}
 
 static inline void*
 tns_parse_string(const char *data, size_t len)

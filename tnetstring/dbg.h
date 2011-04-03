@@ -9,10 +9,10 @@
 #ifndef __dbg_h__
 #define __dbg_h__
 
-#define check(A, M, ...) if(!(A)) { PyErr_Format(_tnetstring_Error, M, ##__VA_ARGS__); goto error; }
+#define check(A, M, ...) if(!(A)) { PyErr_Format(PyExc_ValueError, M, ##__VA_ARGS__); goto error; }
 
 #define sentinel(M, ...)  check(0, M, ##__VA_ARGS__)
 
-#define check_mem(A) check((A), "Out of memory.")
+#define check_mem(A) if(A==NULL) { PyErr_SetString(PyExc_MemoryError, "Out of memory."); goto error; }
 
 #endif

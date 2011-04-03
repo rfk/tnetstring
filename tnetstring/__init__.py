@@ -52,20 +52,6 @@ __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,__ver_patch__,__ver_su
 from collections import deque
 
 
-class Error(Exception):
-    """Base error class for the tnetstring module."""
-    pass
-
-class LoadError(Error):
-    """Error class raised when there's a problem loading a tnetstring."""
-    pass
-
-class DumpError(Error):
-    """Error class raised when there's a problem dumping a tnetstring."""
-    pass
-
-
-
 def dumps(value):
     """dumps(object) -> string
 
@@ -166,7 +152,7 @@ def _rdumpq(q,size,value):
         write(span)
         return size + 1 + len(span)
     else:
-        raise DumpError("unserializable object")
+        raise ValueError("unserializable object")
 
 
 def _gdumps(value):
@@ -221,7 +207,7 @@ def _gdumps(value):
         yield sub
         yield "}"
     else:
-        raise DumpError("unserializable object")
+        raise ValueError("unserializable object")
 
 
 def loads(string):
@@ -245,20 +231,20 @@ def load(file):
     #  Read the length prefix one char at a time.
     c = file.read(1)
     if not c.isdigit():
-        raise LoadError("not a tnetstring: missing or invalid length prefix")
+        raise ValueError("not a tnetstring: missing or invalid length prefix")
     datalen = ord(c) - ord("0")
     c = file.read(1)
     while c.isdigit():
         datalen = (10 * datalen) + (ord(c) - ord("0"))
         c = file.read(1)
     if c != ":":
-        raise LoadError("not a tnetstring: missing or invalid length prefix")
+        raise ValueError("not a tnetstring: missing or invalid length prefix")
     #  Now we can read and parse the payload.
     #  This repeats the dispatch logic of pop() so we can avoid
     #  re-constructing the outermost tnetstring.
     data = file.read(datalen)
     if len(data) != datalen:
-        raise LoadError("not a tnetstring: length prefix too big")
+        raise ValueError("not a tnetstring: length prefix too big")
     type = file.read(1)
     if type == ",":
         return data
@@ -267,22 +253,22 @@ def load(file):
             try:
                 return float(data)
             except ValueError:
-                raise LoadError("not a tnetstring: invalid float literal")
+                raise ValueError("not a tnetstring: invalid float literal")
         else:
             try:
                 return int(data)
             except ValueError:
-                raise LoadError("not a tnetstring: invalid integer literal")
+                raise ValueError("not a tnetstring: invalid integer literal")
     if type == "!":
         if data == "true":
             return True
         elif data == "false":
             return False
         else:
-            raise LoadError("not a tnetstring: invalid boolean literal")
+            raise ValueError("not a tnetstring: invalid boolean literal")
     if type == "~":
         if data:
-            raise LoadError("not a tnetstring: invalid null literal")
+            raise ValueError("not a tnetstring: invalid null literal")
         return None
     if type == "]":
         l = []
@@ -297,7 +283,7 @@ def load(file):
             (val,data) = pop(data)
             d[key] = val
         return d
-    raise LoadError("unknown type tag")
+    raise ValueError("unknown type tag")
     
 
 
@@ -313,13 +299,13 @@ def pop(string):
         (dlen,rest) = string.split(":",1)
         dlen = int(dlen)
     except ValueError:
-        raise LoadError("not a tnetstring: missing or invalid length prefix")
+        raise ValueError("not a tnetstring: missing or invalid length prefix")
     try:
         (data,type,remain) = (rest[:dlen],rest[dlen],rest[dlen+1:])
     except IndexError:
         #  This fires if len(rest) < dlen, meaning we don't need
         #  to further validate that data is the right length.
-        raise LoadError("not a tnetstring: invalid length prefix")
+        raise ValueError("not a tnetstring: invalid length prefix")
     #  Parse the data based on the type tag.
     if type == ",":
         return (data,remain)
@@ -328,22 +314,22 @@ def pop(string):
             try:
                 return (float(data),remain)
             except ValueError:
-                raise LoadError("not a tnetstring: invalid float literal")
+                raise ValueError("not a tnetstring: invalid float literal")
         else:
             try:
                 return (int(data),remain)
             except ValueError:
-                raise LoadError("not a tnetstring: invalid integer literal")
+                raise ValueError("not a tnetstring: invalid integer literal")
     if type == "!":
         if data == "true":
             return (True,remain)
         elif data == "false":
             return (False,remain)
         else:
-            raise LoadError("not a tnetstring: invalid boolean literal")
+            raise ValueError("not a tnetstring: invalid boolean literal")
     if type == "~":
         if data:
-            raise LoadError("not a tnetstring: invalid null literal")
+            raise ValueError("not a tnetstring: invalid null literal")
         return (None,remain)
     if type == "]":
         l = []
@@ -358,7 +344,7 @@ def pop(string):
             (val,data) = pop(data)
             d[key] = val
         return (d,remain)
-    raise LoadError("unknown type tag")
+    raise ValueError("unknown type tag")
 
 
 
@@ -368,9 +354,6 @@ try:
 except ImportError:
     pass
 else:
-    Error = _tnetstring.Error
-    LoadError = _tnetstring.LoadError
-    DumpError = _tnetstring.DumpError
     dumps = _tnetstring.dumps
     load = _tnetstring.load
     loads = _tnetstring.loads
