@@ -82,6 +82,7 @@ static inline int tns_outbuf_extend(tns_outbuf *outbuf, size_t free_size)
   new_head = new_buf + new_size - used_size;
   memmove(new_head, outbuf->head, used_size);
 
+  free(outbuf->buffer);
   outbuf->buffer = new_buf;
   outbuf->head = new_head;
   outbuf->alloc_size = new_size;
