@@ -1,0 +1,8 @@
+
+include LICENSE.txt
+include ChangeLog.txt
+include README.rst
+recursive-include tnetstring *.c
+recursive-include tnetstring *.h
+recursive-include tnetstring/tests *.txt
+
