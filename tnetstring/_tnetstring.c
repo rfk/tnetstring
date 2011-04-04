@@ -293,15 +293,14 @@ tns_parse_string(const char *data, size_t len)
 static inline int
 tns_str_is_float(const char *data, size_t len)
 {
-  size_t i=0;
-  while(i < len) {
-      switch(data[i]) {
+  const char* dend = data + len;
+  while(data < dend) {
+      switch(*data++) {
         case '.':
         case 'e':
         case 'E':
           return 1;
       }
-      i++;
   }
   return 0;
 }
@@ -310,21 +309,58 @@ tns_str_is_float(const char *data, size_t len)
 static inline void*
 tns_parse_number(const char *data, size_t len)
 {
-  double d;
-  long long l;
+  double d = 0;
+  int neg = 0;
+  long l = 0;
+  char c;
   char *dataend;
+  const char *pos, *eod;
   if(tns_str_is_float(data, len)) {
+      //  Technically this allows whitespace around the float, which
+      //  isn't valid in a tnetstring.  But I don't want to waste the
+      //  time checking and I am *not* reimplementing strtod.
       d = strtod(data, &dataend);
       if(dataend != data + len) {
           return NULL;
       }
       return PyFloat_FromDouble(d);
   } else {
-      l = strtoll(data, &dataend, 10);
-      if(dataend != data + len) {
+      //  We need tighter error-checking than strtol gives us.
+      pos = data;
+      eod = data + len;
+      c = *pos++;
+      switch(c) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          l = c - '0';
+          break;
+        case '+':
+          break;
+        case '-':
+          neg = 1;
+          break;
+        default:
           return NULL;
       }
-      return PyLong_FromLongLong(l);
+      while(pos < eod) {
+          c = *pos++;
+          if(c < '0' || c > '9') {
+              return NULL;
+          }
+          l = (l * 10) + (c - '0');
+      }
+      if(neg) {
+          l = -1* l;
+      }
+      return PyLong_FromLong(l);
   }
   return NULL;
 }
