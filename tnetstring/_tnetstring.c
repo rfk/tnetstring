@@ -310,13 +310,14 @@ static inline void*
 tns_parse_number(const char *data, size_t len)
 {
   double d = 0;
-  int neg = 0;
   long l = 0;
   long long ll = 0;
-  PyObject *v = NULL;
+  int sign = 1;
   char c;
   char *dataend;
   const char *pos, *eod;
+  PyObject *v = NULL;
+
   if(tns_str_is_float(data, len)) {
       //  Technically this allows whitespace around the float, which
       //  isn't valid in a tnetstring.  But I don't want to waste the
@@ -348,22 +349,31 @@ tns_parse_number(const char *data, size_t len)
         case '+':
           break;
         case '-':
-          neg = 1;
+          sign = -1;
           break;
         default:
           return NULL;
       }
       while(pos < eod) {
           c = *pos++;
-          if(c < '0' || c > '9') {
+          switch(c) {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+              l = (l * 10) + (c - '0');
+              break;
+            default:
               return NULL;
           }
-          l = (l * 10) + (c - '0');
       }
-      if(neg) {
-          l = -1* l;
-      }
-      return PyLong_FromLong(l);
+      return PyLong_FromLong(l * sign);
   } else if(len < 19) {
       //  Anything with less than 19 digits fits in a long long.
       //  Hand-parsing, as we need tighter error-checking than strtoll.
@@ -386,22 +396,31 @@ tns_parse_number(const char *data, size_t len)
         case '+':
           break;
         case '-':
-          neg = 1;
+          sign = -1;
           break;
         default:
           return NULL;
       }
       while(pos < eod) {
           c = *pos++;
-          if(c < '0' || c > '9') {
+          switch(c) {
+            case '0':
+            case '1':
+            case '2':
+            case '3':
+            case '4':
+            case '5':
+            case '6':
+            case '7':
+            case '8':
+            case '9':
+              ll = (ll * 10) + (c - '0');
+              break;
+            default:
               return NULL;
           }
-          ll = (ll * 10) + (c - '0');
       }
-      if(neg) {
-          ll = -1* ll;
-      }
-      return PyLong_FromLongLong(ll);
+      return PyLong_FromLongLong(ll * sign);
   } else { 
       //  Really big numbers must be parsed by python.
       //  Technically this allows whitespace around the number, which
