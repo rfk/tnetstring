@@ -58,7 +58,10 @@ def get_random_object(random=random,depth=0,jsonsafe=False):
         if what == 2:
             return False
         if what == 3:
-            return random.randint(0,sys.maxint)
+            if random.randint(0,1) == 0:
+                return random.randint(0,sys.maxint)
+            else:
+                return -1 * random.randint(0,sys.maxint)
         #  cjson can't reliably round-trip floats.
         if what == 4 and not jsonsafe:
             return random.randint(0,sys.maxint)*1.0/random.randint(0,sys.maxint)
