@@ -312,6 +312,8 @@ tns_parse_number(const char *data, size_t len)
   double d = 0;
   int neg = 0;
   long l = 0;
+  long long ll = 0;
+  PyObject *v = NULL;
   char c;
   char *dataend;
   const char *pos, *eod;
@@ -324,8 +326,9 @@ tns_parse_number(const char *data, size_t len)
           return NULL;
       }
       return PyFloat_FromDouble(d);
-  } else {
-      //  We need tighter error-checking than strtol gives us.
+  } else if (len < 10) {
+      //  Anything with less than 10 digits, we can fit into a long.
+      //  Hand-parsing, as we need tighter error-checking than strtol.
       pos = data;
       eod = data + len;
       c = *pos++;
@@ -361,6 +364,54 @@ tns_parse_number(const char *data, size_t len)
           l = -1* l;
       }
       return PyLong_FromLong(l);
+  } else if(len < 19) {
+      //  Anything with less than 19 digits fits in a long long.
+      //  Hand-parsing, as we need tighter error-checking than strtoll.
+      pos = data;
+      eod = data + len;
+      c = *pos++;
+      switch(c) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          ll = c - '0';
+          break;
+        case '+':
+          break;
+        case '-':
+          neg = 1;
+          break;
+        default:
+          return NULL;
+      }
+      while(pos < eod) {
+          c = *pos++;
+          if(c < '0' || c > '9') {
+              return NULL;
+          }
+          ll = (ll * 10) + (c - '0');
+      }
+      if(neg) {
+          ll = -1* ll;
+      }
+      return PyLong_FromLongLong(ll);
+  } else { 
+      //  Really big numbers must be parsed by python.
+      //  Technically this allows whitespace around the number, which
+      //  isn't valid in a tnetstring.  But I don't want to waste the
+      //  time checking and I am *not* reimplementing strtod.
+      v = PyLong_FromString((char *)data, &dataend, 10);
+      if(dataend != data + len) {
+          return NULL;
+      }
+      return v;
   }
   return NULL;
 }
