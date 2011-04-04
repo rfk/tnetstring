@@ -277,28 +277,48 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
   eod = data + len;
 
   //  The first character must be a digit.
-  c = *pos;
-  if(c < '0' || c > '9') {
-      return -1;
-  }
-  value = c - '0';
-  pos++;
-
   //  The netstring spec explicitly forbits padding zeros.
   //  If it's a zero, it must be the only char in the string.
-  if(value == 0) {
-      *sz = value;
+  c = *pos++;
+  switch(c) {
+    case '0':
+      *sz = 0;
       *end = (char*) pos;
       return 0;
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9':
+      value = c - '0';
+      break;
+    default:
+      return -1;
   }
 
   //  Consume all other digits.
   while(pos < eod) {
       c = *pos;
-      if(c < '0' || c > '9') {
+      switch(c) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          break;
+        default:
           *sz = value;
           *end = (char*) pos;
-          return 0;
+          return 0; 
       }
       value = (value * 10) + (c - '0');
       pos++;
