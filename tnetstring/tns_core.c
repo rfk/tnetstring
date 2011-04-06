@@ -122,7 +122,7 @@ static void* tns_parse_payload(tns_type_tag type, const char *data, size_t len)
         break;
     //  Whoops, that ain't a tnetstring.
     default:
-        sentinel("Not a tnetsring: invalid type tag.");
+        sentinel("Not a tnetstring: invalid type tag.");
   }
 
   return val;
