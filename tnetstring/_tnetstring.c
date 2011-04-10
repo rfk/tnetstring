@@ -15,6 +15,7 @@
 #define TNS_MAX_LENGTH 999999999
 #include "tns_core.c"
 
+static tns_ops _tnetstring_ops;
 
 static PyObject*
 _tnetstring_loads(PyObject* self, PyObject *args) 
@@ -34,7 +35,7 @@ _tnetstring_loads(PyObject* self, PyObject *args)
 
   data = PyString_AS_STRING(string);
   len = PyString_GET_SIZE(string);
-  val = tns_parse(data, len, NULL);
+  val = tns_parse(&_tnetstring_ops, data, len, NULL);
   Py_DECREF(string);
   if(val == NULL) {
       return NULL;
@@ -149,7 +150,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
 
   //  Parse out the payload object
   data = PyString_AS_STRING(res);
-  val = tns_parse_payload(data[datalen], data, datalen);
+  val = tns_parse_payload(&_tnetstring_ops, data[datalen], data, datalen);
   Py_DECREF(res); res = NULL;
 
   return val;
@@ -192,7 +193,7 @@ _tnetstring_pop(PyObject* self, PyObject *args)
 
   data = PyString_AS_STRING(string);
   len = PyString_GET_SIZE(string);
-  val = tns_parse(data, len, &remain);
+  val = tns_parse(&_tnetstring_ops, data, len, &remain);
   Py_DECREF(string);
   if(val == NULL) {
       return NULL;
@@ -219,7 +220,7 @@ _tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds)
       Py_DECREF(object);
       return NULL;
   }
-  if(tns_render_value(object, &outbuf) == -1) {
+  if(tns_render_value(&_tnetstring_ops, object, &outbuf) == -1) {
       Py_DECREF(object);
       return NULL;
   }
@@ -269,47 +270,16 @@ static PyMethodDef _tnetstring_methods[] = {
 };
 
 
-PyDoc_STRVAR(module_doc,
-"Fast encoding/decoding of typed-netstrings."
-);
-
-
-PyMODINIT_FUNC
-init_tnetstring(void)
-{
-  Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
-}
-
-
 //  Functions to hook the parser core up to python.
 
-static inline void*
-tns_parse_string(const char *data, size_t len)
+static void* tns_parse_string(const char *data, size_t len)
 {
   return PyString_FromStringAndSize(data, len);
 }
 
 
-static inline int
-tns_str_is_float(const char *data, size_t len)
+static void* tns_parse_integer(const char *data, size_t len)
 {
-  const char* dend = data + len;
-  while(data < dend) {
-      switch(*data++) {
-        case '.':
-        case 'e':
-        case 'E':
-          return 1;
-      }
-  }
-  return 0;
-}
-
-
-static inline void*
-tns_parse_number(const char *data, size_t len)
-{
-  double d = 0;
   long l = 0;
   long long ll = 0;
   int sign = 1;
@@ -318,16 +288,7 @@ tns_parse_number(const char *data, size_t len)
   const char *pos, *eod;
   PyObject *v = NULL;
 
-  if(tns_str_is_float(data, len)) {
-      //  Technically this allows whitespace around the float, which
-      //  isn't valid in a tnetstring.  But I don't want to waste the
-      //  time checking and I am *not* reimplementing strtod.
-      d = strtod(data, &dataend);
-      if(dataend != data + len) {
-          return NULL;
-      }
-      return PyFloat_FromDouble(d);
-  } else if (len < 10) {
+  if (len < 10) {
       //  Anything with less than 10 digits, we can fit into a long.
       //  Hand-parsing, as we need tighter error-checking than strtol.
       pos = data;
@@ -352,7 +313,7 @@ tns_parse_number(const char *data, size_t len)
           sign = -1;
           break;
         default:
-          return NULL;
+          sentinel("invalid integer literal");
       }
       while(pos < eod) {
           c = *pos++;
@@ -370,7 +331,7 @@ tns_parse_number(const char *data, size_t len)
               l = (l * 10) + (c - '0');
               break;
             default:
-              return NULL;
+              sentinel("invalid integer literal");
           }
       }
       return PyLong_FromLong(l * sign);
@@ -399,7 +360,7 @@ tns_parse_number(const char *data, size_t len)
           sign = -1;
           break;
         default:
-          return NULL;
+          sentinel("invalid integer literal");
       }
       while(pos < eod) {
           c = *pos++;
@@ -417,7 +378,7 @@ tns_parse_number(const char *data, size_t len)
               ll = (ll * 10) + (c - '0');
               break;
             default:
-              return NULL;
+              sentinel("invalid integer literal");
           }
       }
       return PyLong_FromLongLong(ll * sign);
@@ -425,58 +386,75 @@ tns_parse_number(const char *data, size_t len)
       //  Really big numbers must be parsed by python.
       //  Technically this allows whitespace around the number, which
       //  isn't valid in a tnetstring.  But I don't want to waste the
-      //  time checking and I am *not* reimplementing strtod.
+      //  time checking and I am *not* reimplementing arbitrary-precision
+      //  strtod for python.
       v = PyLong_FromString((char *)data, &dataend, 10);
-      if(dataend != data + len) {
-          return NULL;
-      }
+      check(dataend == data + len, "invalid integer literal");
       return v;
   }
+  sentinel("invalid code branch, check your compiler...");
+
+error:
   return NULL;
 }
 
 
-static inline void*
-tns_get_null(void)
+static void* tns_parse_float(const char *data, size_t len)
+{
+  double d = 0;
+  char *dataend;
+
+  //  Technically this allows whitespace around the float, which
+  //  isn't valid in a tnetstring.  But I don't want to waste the
+  //  time checking and I am *not* reimplementing strtod.
+  d = strtod(data, &dataend);
+  if(dataend != data + len) {
+      return NULL;
+  }
+  return PyFloat_FromDouble(d);
+}
+
+
+static void* tns_get_null(void)
 {
   Py_INCREF(Py_None);
   return Py_None;
 }
 
-static inline void*
-tns_get_true(void)
+
+static void* tns_get_true(void)
 {
   Py_INCREF(Py_True);
   return Py_True;
 }
 
-static inline void*
-tns_get_false(void)
+
+static void* tns_get_false(void)
 {
   Py_INCREF(Py_False);
   return Py_False;
 }
 
-static inline void*
-tns_new_dict(void)
+
+static void* tns_new_dict(void)
 {
   return PyDict_New();
 }
 
-static inline void*
-tns_new_list(void)
+
+static void* tns_new_list(void)
 {
   return PyList_New(0);
 }
 
-static inline void
-tns_free_value(void *value)
+
+static void tns_free_value(void *value)
 {
   Py_XDECREF(value);
 }
 
-static inline int
-tns_add_to_dict(void *dict, void *key, void *item)
+
+static int tns_add_to_dict(void *dict, void *key, void *item)
 {
   int res;
   res = PyDict_SetItem(dict, key, item);
@@ -488,8 +466,8 @@ tns_add_to_dict(void *dict, void *key, void *item)
   return 0;
 }
 
-static inline int
-tns_add_to_list(void *list, void *item)
+
+static int tns_add_to_list(void *list, void *item)
 {
   int res;
   res = PyList_Append(list, item);
@@ -501,31 +479,46 @@ tns_add_to_list(void *list, void *item)
 }
 
 
-static inline int
-tns_render_string(void *val, tns_outbuf *outbuf)
+static int tns_render_string(void *val, tns_outbuf *outbuf)
 {
     return tns_outbuf_puts(outbuf, PyString_AS_STRING(val),
                                    PyString_GET_SIZE(val));
 }
 
-static inline int
-tns_render_number(void *val, tns_outbuf *outbuf)
-{
-  PyObject *string;
 
-  if(PyFloat_Check((PyObject*)val)) {
-      string = PyObject_Repr(val);
-  } else {
-      string = PyObject_Str(val);
-  }
+static int tns_render_integer(void *val, tns_outbuf *outbuf)
+{
+  PyObject *string = NULL;
+  int res = 0;
+
+  string = PyObject_Str(val);
   if(string == NULL) {
       return -1;
   }
-  return tns_render_string(string, outbuf);
+
+  res = tns_render_string(string, outbuf);
+  Py_DECREF(string);
+  return res;
 }
 
-static inline int
-tns_render_bool(void *val, tns_outbuf *outbuf)
+
+static int tns_render_float(void *val, tns_outbuf *outbuf)
+{
+  PyObject *string;
+  int res = 0;
+
+  string = PyObject_Repr(val);
+  if(string == NULL) {
+      return -1;
+  }
+
+  res = tns_render_string(string, outbuf);
+  Py_DECREF(string);
+  return res;
+}
+
+
+static int tns_render_bool(void *val, tns_outbuf *outbuf)
 {
   if(val == Py_True) {
       return tns_outbuf_puts(outbuf, "true", 4);
@@ -534,17 +527,17 @@ tns_render_bool(void *val, tns_outbuf *outbuf)
   }
 }
 
-static inline int
-tns_render_dict(void *val, tns_outbuf *outbuf)
+
+static int tns_render_dict(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *key, *item;
   Py_ssize_t pos = 0;
 
   while(PyDict_Next(val, &pos, &key, &item)) {
-      if(tns_render_value(item, outbuf) == -1) {
+      if(tns_render_value(ops, item, outbuf) == -1) {
           return -1;
       }
-      if(tns_render_value(key, outbuf) == -1) {
+      if(tns_render_value(ops, key, outbuf) == -1) {
           return -1;
       }
   }
@@ -552,8 +545,7 @@ tns_render_dict(void *val, tns_outbuf *outbuf)
 }
 
 
-static inline int
-tns_render_list(void *val, tns_outbuf *outbuf)
+static int tns_render_list(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *item;
   Py_ssize_t idx;
@@ -563,7 +555,7 @@ tns_render_list(void *val, tns_outbuf *outbuf)
   idx = PyList_GET_SIZE(val) - 1;
   while(idx >= 0) {
       item = PyList_GET_ITEM(val, idx);
-      if(tns_render_value(item, outbuf) == -1) {
+      if(tns_render_value(ops, item, outbuf) == -1) {
           return -1;
       }
       idx--;
@@ -572,8 +564,7 @@ tns_render_list(void *val, tns_outbuf *outbuf)
 }
 
 
-static inline tns_type_tag
-tns_get_type(void *val)
+static tns_type_tag tns_get_type(void *val)
 {
   if(val == Py_True || val == Py_False) {
     return tns_tag_bool;
@@ -582,10 +573,10 @@ tns_get_type(void *val)
     return tns_tag_null;
   }
   if(PyInt_Check((PyObject*)val) || PyLong_Check((PyObject*)val)) {
-    return tns_tag_number;
+    return tns_tag_integer;
   }
   if(PyFloat_Check((PyObject*)val)) {
-    return tns_tag_number;
+    return tns_tag_float;
   }
   if(PyString_Check((PyObject*)val)) {
     return tns_tag_string;
@@ -597,5 +588,40 @@ tns_get_type(void *val)
     return tns_tag_dict;
   }
   return 0;
+}
+
+
+PyDoc_STRVAR(module_doc,
+"Fast encoding/decoding of typed-netstrings."
+);
+
+
+PyMODINIT_FUNC
+init_tnetstring(void)
+{
+  Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
+
+  _tnetstring_ops.get_type = &tns_get_type;
+  _tnetstring_ops.free_value = &tns_free_value;
+
+  _tnetstring_ops.parse_string = tns_parse_string;
+  _tnetstring_ops.parse_integer = tns_parse_integer;
+  _tnetstring_ops.parse_float = tns_parse_float;
+  _tnetstring_ops.get_null = tns_get_null;
+  _tnetstring_ops.get_true = tns_get_true;
+  _tnetstring_ops.get_false = tns_get_false;
+
+  _tnetstring_ops.render_string = tns_render_string;
+  _tnetstring_ops.render_integer = tns_render_integer;
+  _tnetstring_ops.render_float = tns_render_float;
+  _tnetstring_ops.render_bool = tns_render_bool;
+
+  _tnetstring_ops.new_dict = tns_new_dict;
+  _tnetstring_ops.add_to_dict = tns_add_to_dict;
+  _tnetstring_ops.render_dict = tns_render_dict;
+
+  _tnetstring_ops.new_list = tns_new_list;
+  _tnetstring_ops.add_to_list = tns_add_to_list;
+  _tnetstring_ops.render_list = tns_render_list;
 }
 
