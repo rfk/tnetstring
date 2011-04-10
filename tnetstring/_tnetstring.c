@@ -288,9 +288,9 @@ static void* tns_parse_integer(const char *data, size_t len)
   const char *pos, *eod;
   PyObject *v = NULL;
 
+  //  Anything with less than 10 digits, we can fit into a long.
+  //  Hand-parsing, as we need tighter error-checking than strtol.
   if (len < 10) {
-      //  Anything with less than 10 digits, we can fit into a long.
-      //  Hand-parsing, as we need tighter error-checking than strtol.
       pos = data;
       eod = data + len;
       c = *pos++;
@@ -317,27 +317,14 @@ static void* tns_parse_integer(const char *data, size_t len)
       }
       while(pos < eod) {
           c = *pos++;
-          switch(c) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-              l = (l * 10) + (c - '0');
-              break;
-            default:
-              sentinel("invalid integer literal");
-          }
+          check(c >= '0' && c <= '9', "invalid integer literal");
+          l = (l * 10) + (c - '0');
       }
       return PyLong_FromLong(l * sign);
-  } else if(len < 19) {
-      //  Anything with less than 19 digits fits in a long long.
-      //  Hand-parsing, as we need tighter error-checking than strtoll.
+  }
+  //  Anything with less than 19 digits fits in a long long.
+  //  Hand-parsing, as we need tighter error-checking than strtoll.
+  else if(len < 19) {
       pos = data;
       eod = data + len;
       c = *pos++;
@@ -364,30 +351,17 @@ static void* tns_parse_integer(const char *data, size_t len)
       }
       while(pos < eod) {
           c = *pos++;
-          switch(c) {
-            case '0':
-            case '1':
-            case '2':
-            case '3':
-            case '4':
-            case '5':
-            case '6':
-            case '7':
-            case '8':
-            case '9':
-              ll = (ll * 10) + (c - '0');
-              break;
-            default:
-              sentinel("invalid integer literal");
-          }
+          check(c >= '0' && c <= '9', "invalid integer literal");
+          ll = (ll * 10) + (c - '0');
       }
       return PyLong_FromLongLong(ll * sign);
-  } else { 
-      //  Really big numbers must be parsed by python.
-      //  Technically this allows whitespace around the number, which
-      //  isn't valid in a tnetstring.  But I don't want to waste the
-      //  time checking and I am *not* reimplementing arbitrary-precision
-      //  strtod for python.
+  }
+  //  Really big numbers must be parsed by python.
+  //  Technically this allows whitespace around the number, which
+  //  isn't valid in a tnetstring.  But I don't want to waste the
+  //  time checking and I am *not* reimplementing arbitrary-precision
+  //  strtod for python.
+  else { 
       v = PyLong_FromString((char *)data, &dataend, 10);
       check(dataend == data + len, "invalid integer literal");
       return v;

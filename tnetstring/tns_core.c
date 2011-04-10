@@ -39,12 +39,12 @@ void* tns_parse(const tns_ops *ops, const char *data, size_t len, char **remain)
 
   //  Read the length of the value, and verify that it ends in a colon.
   check(tns_strtosz(data, len, &vallen, &valstr) != -1,
-        "Not a tnetstring: invalid length prefix.");
+        "Not a tnetstring: invalid length prefix1.");
   check(*valstr == ':',
-        "Not a tnetstring: invalid length prefix.");
+        "Not a tnetstring: invalid length prefix2. %s");
   valstr++;
   check((valstr+vallen) < (data+len),
-        "Not a tnetstring: invalid length prefix.");
+        "Not a tnetstring: invalid length prefix3.");
 
   //  Grab the type tag from the end of the value.
   type = valstr[vallen];
@@ -310,19 +310,7 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
   //  Consume all other digits.
   while(pos < eod) {
       c = *pos;
-      switch(c) {
-        case '0':
-        case '1':
-        case '2':
-        case '3':
-        case '4':
-        case '5':
-        case '6':
-        case '7':
-        case '8':
-        case '9':
-          break;
-        default:
+      if(c < '0' || c > '9') {
           *sz = value;
           *end = (char*) pos;
           return 0; 
