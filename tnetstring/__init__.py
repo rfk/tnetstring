@@ -115,7 +115,7 @@ def _rdumpq(q,size,value):
         data = repr(value) 
         ldata = len(data)
         span = str(ldata)
-        write("#")
+        write("^")
         write(data)
         write(":")
         write(span)
@@ -177,7 +177,7 @@ def _gdumps(value):
         yield str(len(data))
         yield ":"
         yield data
-        yield "#"
+        yield "^"
     elif isinstance(value,(str,)):
         yield str(len(value))
         yield ":"
@@ -250,16 +250,15 @@ def load(file):
     if type == ",":
         return data
     if type == "#":
-        if "." in data or "e" in data or "E" in data:
-            try:
-                return float(data)
-            except ValueError:
-                raise ValueError("not a tnetstring: invalid float literal")
-        else:
-            try:
-                return int(data)
-            except ValueError:
-                raise ValueError("not a tnetstring: invalid integer literal")
+        try:
+            return int(data)
+        except ValueError:
+            raise ValueError("not a tnetstring: invalid integer literal")
+    if type == "^":
+        try:
+            return float(data)
+        except ValueError:
+            raise ValueError("not a tnetstring: invalid float literal")
     if type == "!":
         if data == "true":
             return True
@@ -311,16 +310,15 @@ def pop(string):
     if type == ",":
         return (data,remain)
     if type == "#":
-        if "." in data or "e" in data or "E" in data:
-            try:
-                return (float(data),remain)
-            except ValueError:
-                raise ValueError("not a tnetstring: invalid float literal")
-        else:
-            try:
-                return (int(data),remain)
-            except ValueError:
-                raise ValueError("not a tnetstring: invalid integer literal")
+        try:
+            return (int(data),remain)
+        except ValueError:
+            raise ValueError("not a tnetstring: invalid integer literal")
+    if type == "^":
+        try:
+            return (float(data),remain)
+        except ValueError:
+            raise ValueError("not a tnetstring: invalid float literal")
     if type == "!":
         if data == "true":
             return (True,remain)
