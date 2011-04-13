@@ -11,7 +11,7 @@ import sys
 setup_kwds = {}
 if sys.version_info > (3,):
     from setuptools import setup, Extension
-    setup_kwds["test_suite"] = "dexml.test"
+    setup_kwds["test_suite"] = "tnetstring.test"
     setup_kwds["use_2to3"] = True
 else:
     from distutils.core import setup, Extension
