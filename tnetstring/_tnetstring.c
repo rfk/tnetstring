@@ -17,6 +17,8 @@
 
 static tns_ops _tnetstring_ops;
 
+//  _tnetstring_loads:  parse tnetstring-format value from a string.
+//
 static PyObject*
 _tnetstring_loads(PyObject* self, PyObject *args) 
 {
@@ -45,6 +47,12 @@ _tnetstring_loads(PyObject* self, PyObject *args)
 }
 
 
+//  _tnetstring_load:  parse tnetstring-format value from a file.
+//
+//  This takes care to read no more data than is required to get the
+//  full tnetstring-encoded value.  It might read arbitrarily-much
+//  data if the file doesn't begin with a valid tnetstring.
+//
 static PyObject*
 _tnetstring_load(PyObject* self, PyObject *args) 
 {
@@ -83,7 +91,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
   }
   c = PyString_AS_STRING(res)[0];
   Py_DECREF(res); res = NULL;
-  //  Note that the netsring spec explicitly forbids padding zeroes.
+  //  Note that the netstring spec explicitly forbids padding zeroes.
   //  If the first char is zero, it must be the only char.
   if(c < '0' || c > '9') {
       PyErr_SetString(PyExc_ValueError,

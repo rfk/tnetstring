@@ -13,10 +13,10 @@
 #define TNS_MAX_LENGTH 999999999
 #endif
 
-//  Current outbuf implementations writes data starting at the back of
-//  the allocaed buffer.  When finished we simply memmove it to the front.
+//  Current outbuf implementation writes data starting at the back of
+//  the allocated buffer.  When finished we simply memmove it to the front.
 //  Here *buffer points to the allocated buffer, while *head points to the
-//  last characer written to the buffer.
+//  last characer written to the buffer (and thus decreases as we write).
 struct tns_outbuf_s {
   char *buffer;
   char *head;

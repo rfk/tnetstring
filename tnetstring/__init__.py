@@ -48,7 +48,7 @@ __version__ = "%d.%d.%d%s" % (__ver_major__,__ver_minor__,__ver_patch__,__ver_su
 from collections import deque
 
 
-def dumps(value):
+def dumps(value,encoding=None):
     """dumps(object) -> string
 
     This function dumps a python object as a tnetstring.
@@ -60,20 +60,20 @@ def dumps(value):
     #  consider the _gdumps() function instead; it's a standard top-down
     #  generator that's simpler to understand but much less efficient.
     q = deque()
-    _rdumpq(q,0,value)
+    _rdumpq(q,0,value,encoding)
     return "".join(q)
 
 
-def dump(value, file):
+def dump(value,file,encoding=None):
     """dump(object, file)
 
     This function dumps a python object as a tnetstring and writes it to
     the given file.
     """
-    file.write(dumps(value))
+    file.write(dumps(value,encoding))
 
 
-def _rdumpq(q,size,value):
+def _rdumpq(q,size,value,encoding=None):
     """Dump value as a tnetstring, to a deque instance, last chunks first.
 
     This function generates the tnetstring representation of the given value,
@@ -92,13 +92,13 @@ def _rdumpq(q,size,value):
     if value is None:
         write("0:~")
         return size + 3
-    elif value is True:
+    if value is True:
         write("4:true!")
         return size + 7
-    elif value is False:
+    if value is False:
         write("5:false!")
         return size + 8
-    elif isinstance(value,(int,long)):
+    if isinstance(value,(int,long)):
         data = str(value) 
         ldata = len(data)
         span = str(ldata)
@@ -107,7 +107,7 @@ def _rdumpq(q,size,value):
         write(":")
         write(span)
         return size + 2 + len(span) + ldata
-    elif isinstance(value,(float,)):
+    if isinstance(value,(float,)):
         #  Use repr() for float rather than str().
         #  It round-trips more accurately.
         #  Probably unnecessary in later python versions that
@@ -120,7 +120,7 @@ def _rdumpq(q,size,value):
         write(":")
         write(span)
         return size + 2 + len(span) + ldata
-    elif isinstance(value,(str,)):
+    if isinstance(value,str):
         lvalue = len(value)
         span = str(lvalue)
         write(",")
@@ -128,7 +128,7 @@ def _rdumpq(q,size,value):
         write(":")
         write(span)
         return size + 2 + len(span) + lvalue
-    elif isinstance(value,(list,tuple,)):
+    if isinstance(value,(list,tuple,)):
         write("]")
         init_size = size = size + 1
         for item in reversed(value):
@@ -137,7 +137,7 @@ def _rdumpq(q,size,value):
         write(":")
         write(span)
         return size + 1 + len(span)
-    elif isinstance(value,(dict,)):
+    if isinstance(value,dict):
         write("}")
         init_size = size = size + 1
         for (k,v) in value.iteritems():
@@ -147,11 +147,21 @@ def _rdumpq(q,size,value):
         write(":")
         write(span)
         return size + 1 + len(span)
-    else:
-        raise ValueError("unserializable object")
+    if isinstance(value,unicode):
+        if encoding is None:
+            raise ValueError("must specify encoding to dump unicode strings")
+        value = value.encode(encoding)
+        lvalue = len(value)
+        span = str(lvalue)
+        write(",")
+        write(value)
+        write(":")
+        write(span)
+        return size + 2 + len(span) + lvalue
+    raise ValueError("unserializable object")
 
 
-def _gdumps(value):
+def _gdumps(value,encoding):
     """Generate fragments of value dumped as a tnetstring.
 
     This is the naive dumping algorithm, implemented as a generator so that
@@ -202,11 +212,19 @@ def _gdumps(value):
         yield ":"
         yield sub
         yield "}"
+    elif isinstance(value,(unicode,)):
+        if encoding is None:
+            raise ValueError("must specify encoding to dump unicode strings")
+        value = value.encode(encoding)
+        yield str(len(value))
+        yield ":"
+        yield value
+        yield ","
     else:
         raise ValueError("unserializable object")
 
 
-def loads(string):
+def loads(string,encoding=None):
     """loads(string) -> object
 
     This function parses a tnetstring into a python object.
@@ -214,10 +232,10 @@ def loads(string):
     #  No point duplicating effort here.  In the C-extension version,
     #  loads() is measurably faster then pop() since it can avoid
     #  the overhead of building a second string.
-    return pop(string)[0]
+    return pop(string,encoding)[0]
 
 
-def load(file):
+def load(file,encoding=None):
     """load(file) -> object
 
     This function reads a tnetstring from a file and parses it into a
@@ -248,6 +266,8 @@ def load(file):
         raise ValueError("not a tnetstring: length prefix too big")
     type = file.read(1)
     if type == ",":
+        if encoding is not None:
+            return data.decode(encoding)
         return data
     if type == "#":
         try:
@@ -287,7 +307,7 @@ def load(file):
     
 
 
-def pop(string):
+def pop(string,encoding=None):
     """pop(string) -> (object, remain)
 
     This function parses a tnetstring into a python object.
@@ -308,6 +328,8 @@ def pop(string):
         raise ValueError("not a tnetstring: invalid length prefix")
     #  Parse the data based on the type tag.
     if type == ",":
+        if encoding is not None:
+            return (data.decode(encoding),remain)
         return (data,remain)
     if type == "#":
         try:

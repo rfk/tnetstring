@@ -89,6 +89,16 @@ class Test_Format(unittest.TestCase):
             self.assertEqual(v,tnetstring.loads(tnetstring.dumps(v)))
             self.assertEqual((v,""),tnetstring.pop(tnetstring.dumps(v)))
 
+    def test_unicode_handling(self):
+        self.assertRaises(ValueError,tnetstring.dumps,u"hello")
+        self.assertEquals(tnetstring.dumps(u"hello","utf8"),"5:hello,")
+        self.assertEquals(type(tnetstring.loads("5:hello,")),str)
+        self.assertEquals(type(tnetstring.loads("5:hello,","utf8")),unicode)
+        ALPHA = u"\N{GREEK CAPITAL LETTER ALPHA}lpha"
+        self.assertEquals(tnetstring.dumps(ALPHA,"utf8"),"6:"+ALPHA.encode("utf8")+",")
+        self.assertEquals(tnetstring.dumps(ALPHA,"utf16"),"12:"+ALPHA.encode("utf16")+",")
+        self.assertEquals(tnetstring.loads("12:\xff\xfe\x91\x03l\x00p\x00h\x00a\x00,","utf16"),ALPHA)
+
 
 class Test_FileLoading(unittest.TestCase):
 
