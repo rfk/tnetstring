@@ -15,18 +15,36 @@
 #define TNS_MAX_LENGTH 999999999
 #include "tns_core.c"
 
-static tns_ops _tnetstring_ops;
+
+//  We have one static tns_ops struct far parsing bytestrings.
+static tns_ops _tnetstring_ops_bytes;
+
+//  Unicode parsing ops are created on demand.
+//  We allocate a struct containing all the function pointers along with
+//  the encoding string, as a primitive kind of closure.
+//  Eventually we should cache these.
+struct tns_ops_with_encoding_s {
+  tns_ops ops;
+  char *encoding;
+};
+typedef struct tns_ops_with_encoding_s tns_ops_with_encoding;
+
+static tns_ops *_tnetstring_get_unicode_ops(PyObject *encoding);
+
 
 //  _tnetstring_loads:  parse tnetstring-format value from a string.
 //
 static PyObject*
 _tnetstring_loads(PyObject* self, PyObject *args) 
 {
-  PyObject *string, *val;
+  PyObject *string = NULL;
+  PyObject *encoding = Py_None;
+  PyObject *val = NULL;
+  tns_ops *ops = &_tnetstring_ops_bytes;
   char *data;
   size_t len;
 
-  if(!PyArg_UnpackTuple(args, "loads", 1, 1, &string)) {
+  if(!PyArg_UnpackTuple(args, "loads", 1, 2, &string, &encoding)) {
       return NULL;
   }
   if(!PyString_Check(string)) {
@@ -35,15 +53,34 @@ _tnetstring_loads(PyObject* self, PyObject *args)
   }
   Py_INCREF(string);
 
-  data = PyString_AS_STRING(string);
-  len = PyString_GET_SIZE(string);
-  val = tns_parse(&_tnetstring_ops, data, len, NULL);
-  Py_DECREF(string);
-  if(val == NULL) {
-      return NULL;
+  if(encoding == Py_None) {
+      data = PyString_AS_STRING(string);
+      len = PyString_GET_SIZE(string);
+      val = tns_parse(ops, data, len, NULL);
+  } else {
+      if(!PyString_Check(encoding)) {
+          PyErr_SetString(PyExc_TypeError, "encoding must be a string");
+          goto error;
+      }
+      Py_INCREF(encoding);
+      ops = _tnetstring_get_unicode_ops(encoding);
+      if(ops == NULL) {
+          Py_DECREF(encoding);
+          goto error;
+      }
+      data = PyString_AS_STRING(string);
+      len = PyString_GET_SIZE(string);
+      val = tns_parse(ops, data, len, NULL);
+      free(ops);
+      Py_DECREF(encoding);
   }
 
+  Py_DECREF(string);
   return val;
+
+error:
+  Py_DECREF(string);
+  return NULL;
 }
 
 
@@ -58,17 +95,30 @@ _tnetstring_load(PyObject* self, PyObject *args)
 {
   PyObject *val = NULL;
   PyObject *file = NULL;
+  PyObject *encoding = Py_None;
   PyObject *methnm = NULL;
   PyObject *metharg = NULL;
   PyObject *res = NULL;
+  tns_ops *ops = &_tnetstring_ops_bytes;
   char c, *data;
   size_t datalen = 0;
 
-  //  Grab file-like object as only argument
-  if(!PyArg_UnpackTuple(args, "load", 1, 1, &file)) {
+  if(!PyArg_UnpackTuple(args, "load", 1, 2, &file, &encoding)) {
       goto error;
   }
   Py_INCREF(file);
+
+  if(encoding != Py_None) {
+      if(!PyString_Check(encoding)) {
+          PyErr_SetString(PyExc_TypeError, "encoding must be a string");
+          goto error;
+      }
+      Py_INCREF(encoding);
+      ops = _tnetstring_get_unicode_ops(encoding);
+      if(ops == NULL) {
+          goto error;
+      }
+  }
 
   //  We're going to read one char at a time
   if((methnm = PyString_FromString("read")) == NULL) {
@@ -113,7 +163,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
   } else {
       do {
           datalen = (10 * datalen) + (c - '0');
-          check(datalen < TNS_MAX_LENGTH,
+          check(datalen <= TNS_MAX_LENGTH,
                 "Not a tnetstring: absurdly large length prefix"); 
           res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
           if(res == NULL) {
@@ -158,14 +208,23 @@ _tnetstring_load(PyObject* self, PyObject *args)
 
   //  Parse out the payload object
   data = PyString_AS_STRING(res);
-  val = tns_parse_payload(&_tnetstring_ops, data[datalen], data, datalen);
+  val = tns_parse_payload(ops, data[datalen], data, datalen);
   Py_DECREF(res); res = NULL;
+
+  if(ops != &_tnetstring_ops_bytes) {
+      free(ops);
+      Py_DECREF(encoding);
+  }
 
   return val;
 
 error:
   if(file != NULL) {
       Py_DECREF(file);
+  }
+  if(ops != &_tnetstring_ops_bytes) {
+      free(ops);
+      Py_DECREF(encoding);
   }
   if(methnm != NULL) {
       Py_DECREF(methnm);
@@ -186,23 +245,43 @@ error:
 static PyObject*
 _tnetstring_pop(PyObject* self, PyObject *args) 
 {
-  PyObject *string, *val, *rest;
+  PyObject *string = NULL;
+  PyObject *val = NULL;
+  PyObject *rest = NULL;
+  PyObject *encoding = Py_None;
+  tns_ops *ops = &_tnetstring_ops_bytes;
   char *data, *remain;
   size_t len;
 
-  if(!PyArg_UnpackTuple(args, "pop", 1, 1, &string)) {
+  if(!PyArg_UnpackTuple(args, "pop", 1, 2, &string, &encoding)) {
       return NULL;
   }
   if(!PyString_Check(string)) {
       PyErr_SetString(PyExc_TypeError, "arg must be a string");
       return NULL;
   }
+  if(encoding != Py_None) {
+      if(!PyString_Check(encoding)) {
+          PyErr_SetString(PyExc_TypeError, "encoding must be a string");
+          return NULL;
+      }
+      Py_INCREF(encoding);
+      ops = _tnetstring_get_unicode_ops(encoding);
+      if(ops == NULL) {
+          Py_DECREF(encoding);
+          return NULL;
+      }
+  }
   Py_INCREF(string);
 
   data = PyString_AS_STRING(string);
   len = PyString_GET_SIZE(string);
-  val = tns_parse(&_tnetstring_ops, data, len, &remain);
+  val = tns_parse(ops, data, len, &remain);
   Py_DECREF(string);
+  if(ops != &_tnetstring_ops_bytes) {
+      free(ops);
+      Py_DECREF(encoding);
+  }
   if(val == NULL) {
       return NULL;
   }
@@ -213,36 +292,61 @@ _tnetstring_pop(PyObject* self, PyObject *args)
 
 
 static PyObject*
-_tnetstring_dumps(PyObject* self, PyObject *args, PyObject *kwds) 
+_tnetstring_dumps(PyObject* self, PyObject *args)
 {
-  PyObject *object, *string;
+  PyObject *object = NULL;
+  PyObject *string = NULL;
+  PyObject *encoding = Py_None;
+  tns_ops *ops = &_tnetstring_ops_bytes;
   tns_outbuf outbuf;
 
-  if(!PyArg_UnpackTuple(args, "dumps", 1, 1, &object)) {
+  if(!PyArg_UnpackTuple(args, "dumps", 1, 2, &object, &encoding)) {
       return NULL;
+  }
+  if(encoding != Py_None) {
+      if(!PyString_Check(encoding)) {
+          PyErr_SetString(PyExc_TypeError, "encoding must be a string");
+          return NULL;
+      }
+      Py_INCREF(encoding);
+      ops = _tnetstring_get_unicode_ops(encoding);
+      if(ops == NULL) {
+          Py_DECREF(encoding);
+          return NULL;
+      }
   }
   Py_INCREF(object);
 
-  
   if(tns_outbuf_init(&outbuf) == -1) {
-      Py_DECREF(object);
-      return NULL;
+      goto error;
   }
-  if(tns_render_value(&_tnetstring_ops, object, &outbuf) == -1) {
-      Py_DECREF(object);
-      return NULL;
+  if(tns_render_value(ops, object, &outbuf) == -1) {
+      goto error;
   }
 
   Py_DECREF(object);
   string = PyString_FromStringAndSize(NULL,tns_outbuf_size(&outbuf));
   if(string == NULL) {
-      return NULL;
+      goto error;
   }
 
   tns_outbuf_memmove(&outbuf, PyString_AS_STRING(string));
   free(outbuf.buffer);
 
+  if(ops != &_tnetstring_ops_bytes) {
+      free(ops);
+      Py_DECREF(encoding);
+  }
+
   return string;
+
+error:
+  if(ops != &_tnetstring_ops_bytes) {
+      free(ops);
+      Py_DECREF(encoding);
+  }
+  Py_DECREF(object);
+  return NULL;
 }
 
 
@@ -250,20 +354,20 @@ static PyMethodDef _tnetstring_methods[] = {
     {"load",
      (PyCFunction)_tnetstring_load,
      METH_VARARGS,
-     PyDoc_STR("load(file) -> object\n"
+     PyDoc_STR("load(file,encoding=None) -> object\n"
                "This function reads a tnetstring from a file and parses it\n"
                " into a python object.")},
 
     {"loads",
      (PyCFunction)_tnetstring_loads,
      METH_VARARGS,
-     PyDoc_STR("loads(string) -> object\n"
+     PyDoc_STR("loads(string,encoding=None) -> object\n"
                "This function parses a tnetstring into a python object.")},
 
     {"pop",
      (PyCFunction)_tnetstring_pop,
      METH_VARARGS,
-     PyDoc_STR("pop(string) -> (object, remain)\n"
+     PyDoc_STR("pop(string,encoding=None) -> (object, remain)\n"
                "This function parses a tnetstring into a python object.\n"
                "It returns a tuple giving the parsed object and a string\n"
                "containing any unparsed data.")},
@@ -271,7 +375,7 @@ static PyMethodDef _tnetstring_methods[] = {
     {"dumps",
      (PyCFunction)_tnetstring_dumps,
      METH_VARARGS,
-     PyDoc_STR("dumps(object) -> string\n"
+     PyDoc_STR("dumps(object,encoding=None) -> string\n"
                "This function dumps a python object as a tnetstring.")},
 
     {NULL, NULL}
@@ -280,13 +384,23 @@ static PyMethodDef _tnetstring_methods[] = {
 
 //  Functions to hook the parser core up to python.
 
-static void* tns_parse_string(const char *data, size_t len)
+static void*
+tns_parse_string(const tns_ops *ops, const char *data, size_t len)
 {
   return PyString_FromStringAndSize(data, len);
 }
 
 
-static void* tns_parse_integer(const char *data, size_t len)
+static void*
+tns_parse_unicode(const tns_ops *ops, const char *data, size_t len)
+{
+  char* encoding = ((tns_ops_with_encoding*)ops)->encoding;
+  return PyUnicode_Decode(data, len, encoding, NULL);
+}
+
+
+static void*
+tns_parse_integer(const tns_ops *ops, const char *data, size_t len)
 {
   long l = 0;
   long long ll = 0;
@@ -381,7 +495,8 @@ error:
 }
 
 
-static void* tns_parse_float(const char *data, size_t len)
+static void*
+tns_parse_float(const tns_ops *ops, const char *data, size_t len)
 {
   double d = 0;
   char *dataend;
@@ -397,46 +512,53 @@ static void* tns_parse_float(const char *data, size_t len)
 }
 
 
-static void* tns_get_null(void)
+static void*
+tns_get_null(const tns_ops *ops)
 {
   Py_INCREF(Py_None);
   return Py_None;
 }
 
 
-static void* tns_get_true(void)
+static void*
+tns_get_true(const tns_ops *ops)
 {
   Py_INCREF(Py_True);
   return Py_True;
 }
 
 
-static void* tns_get_false(void)
+static void*
+tns_get_false(const tns_ops *ops)
 {
   Py_INCREF(Py_False);
   return Py_False;
 }
 
 
-static void* tns_new_dict(void)
+static void*
+tns_new_dict(const tns_ops *ops)
 {
   return PyDict_New();
 }
 
 
-static void* tns_new_list(void)
+static void*
+tns_new_list(const tns_ops *ops)
 {
   return PyList_New(0);
 }
 
 
-static void tns_free_value(void *value)
+static void
+tns_free_value(const tns_ops *ops, void *value)
 {
   Py_XDECREF(value);
 }
 
 
-static int tns_add_to_dict(void *dict, void *key, void *item)
+static int
+tns_add_to_dict(const tns_ops *ops, void *dict, void *key, void *item)
 {
   int res;
   res = PyDict_SetItem(dict, key, item);
@@ -449,7 +571,8 @@ static int tns_add_to_dict(void *dict, void *key, void *item)
 }
 
 
-static int tns_add_to_list(void *list, void *item)
+static int
+tns_add_to_list(const tns_ops *ops, void *list, void *item)
 {
   int res;
   res = PyList_Append(list, item);
@@ -461,14 +584,44 @@ static int tns_add_to_list(void *list, void *item)
 }
 
 
-static int tns_render_string(void *val, tns_outbuf *outbuf)
+static int
+tns_render_string(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
-    return tns_outbuf_puts(outbuf, PyString_AS_STRING(val),
-                                   PyString_GET_SIZE(val));
+  return tns_outbuf_puts(outbuf, PyString_AS_STRING(val),
+                                 PyString_GET_SIZE(val));
 }
 
 
-static int tns_render_integer(void *val, tns_outbuf *outbuf)
+static int
+tns_render_unicode(const tns_ops *ops, void *val, tns_outbuf *outbuf)
+{
+  PyObject *bytes;
+  char* encoding = ((tns_ops_with_encoding*)ops)->encoding;
+
+  if(PyUnicode_Check(val)) {
+      bytes = PyUnicode_Encode(PyUnicode_AS_UNICODE(val),
+                                PyUnicode_GET_SIZE(val),
+                                encoding, NULL);
+      if(bytes == NULL) {
+          return -1;
+      }
+      if(tns_render_string(ops, bytes, outbuf) == -1) {
+          return -1;
+      }
+      Py_DECREF(bytes);
+      return 0;
+  }
+
+  if(PyString_Check(val)) {
+    return tns_render_string(ops, val, outbuf);
+  }
+
+  return -1;
+}
+
+
+static int
+tns_render_integer(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *string = NULL;
   int res = 0;
@@ -478,13 +631,14 @@ static int tns_render_integer(void *val, tns_outbuf *outbuf)
       return -1;
   }
 
-  res = tns_render_string(string, outbuf);
+  res = tns_render_string(ops, string, outbuf);
   Py_DECREF(string);
   return res;
 }
 
 
-static int tns_render_float(void *val, tns_outbuf *outbuf)
+static int
+tns_render_float(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *string;
   int res = 0;
@@ -494,13 +648,14 @@ static int tns_render_float(void *val, tns_outbuf *outbuf)
       return -1;
   }
 
-  res = tns_render_string(string, outbuf);
+  res = tns_render_string(ops, string, outbuf);
   Py_DECREF(string);
   return res;
 }
 
 
-static int tns_render_bool(void *val, tns_outbuf *outbuf)
+static int
+tns_render_bool(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   if(val == Py_True) {
       return tns_outbuf_puts(outbuf, "true", 4);
@@ -510,7 +665,8 @@ static int tns_render_bool(void *val, tns_outbuf *outbuf)
 }
 
 
-static int tns_render_dict(const tns_ops *ops, void *val, tns_outbuf *outbuf)
+static int
+tns_render_dict(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *key, *item;
   Py_ssize_t pos = 0;
@@ -527,7 +683,8 @@ static int tns_render_dict(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 }
 
 
-static int tns_render_list(const tns_ops *ops, void *val, tns_outbuf *outbuf)
+static int
+tns_render_list(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 {
   PyObject *item;
   Py_ssize_t idx;
@@ -546,7 +703,8 @@ static int tns_render_list(const tns_ops *ops, void *val, tns_outbuf *outbuf)
 }
 
 
-static tns_type_tag tns_get_type(void *val)
+static
+tns_type_tag tns_get_type(const tns_ops *ops, void *val)
 {
   if(val == Py_True || val == Py_False) {
     return tns_tag_bool;
@@ -573,6 +731,63 @@ static tns_type_tag tns_get_type(void *val)
 }
 
 
+static
+tns_type_tag tns_get_type_unicode(const tns_ops *ops, void *val)
+{
+  tns_type_tag type = 0;
+
+  type = tns_get_type(ops, val);
+  if(type == 0) {
+      if(PyUnicode_Check(val)) {
+          type = tns_tag_string;
+      }
+  }
+
+  return type;
+}
+
+
+static tns_ops *_tnetstring_get_unicode_ops(PyObject *encoding)
+{
+  tns_ops_with_encoding *opswe = NULL;
+  tns_ops *ops = NULL;
+
+  opswe = malloc(sizeof(tns_ops_with_encoding));
+  if(opswe == NULL) {
+      PyErr_SetString(PyExc_MemoryError, "could not allocate ops struct");
+      return NULL;
+  }
+  ops = (tns_ops*)opswe;
+
+  opswe->encoding = PyString_AS_STRING(encoding);
+
+  ops->get_type = &tns_get_type_unicode;
+  ops->free_value = &tns_free_value;
+
+  ops->parse_string = tns_parse_unicode;
+  ops->parse_integer = tns_parse_integer;
+  ops->parse_float = tns_parse_float;
+  ops->get_null = tns_get_null;
+  ops->get_true = tns_get_true;
+  ops->get_false = tns_get_false;
+
+  ops->render_string = tns_render_unicode;
+  ops->render_integer = tns_render_integer;
+  ops->render_float = tns_render_float;
+  ops->render_bool = tns_render_bool;
+
+  ops->new_dict = tns_new_dict;
+  ops->add_to_dict = tns_add_to_dict;
+  ops->render_dict = tns_render_dict;
+
+  ops->new_list = tns_new_list;
+  ops->add_to_list = tns_add_to_list;
+  ops->render_list = tns_render_list;
+
+  return ops;
+}
+
+
 PyDoc_STRVAR(module_doc,
 "Fast encoding/decoding of typed-netstrings."
 );
@@ -583,27 +798,28 @@ init_tnetstring(void)
 {
   Py_InitModule3("_tnetstring", _tnetstring_methods, module_doc);
 
-  _tnetstring_ops.get_type = &tns_get_type;
-  _tnetstring_ops.free_value = &tns_free_value;
+  //  Initialize function pointers for parsing bytes.
+  _tnetstring_ops_bytes.get_type = &tns_get_type;
+  _tnetstring_ops_bytes.free_value = &tns_free_value;
 
-  _tnetstring_ops.parse_string = tns_parse_string;
-  _tnetstring_ops.parse_integer = tns_parse_integer;
-  _tnetstring_ops.parse_float = tns_parse_float;
-  _tnetstring_ops.get_null = tns_get_null;
-  _tnetstring_ops.get_true = tns_get_true;
-  _tnetstring_ops.get_false = tns_get_false;
+  _tnetstring_ops_bytes.parse_string = tns_parse_string;
+  _tnetstring_ops_bytes.parse_integer = tns_parse_integer;
+  _tnetstring_ops_bytes.parse_float = tns_parse_float;
+  _tnetstring_ops_bytes.get_null = tns_get_null;
+  _tnetstring_ops_bytes.get_true = tns_get_true;
+  _tnetstring_ops_bytes.get_false = tns_get_false;
 
-  _tnetstring_ops.render_string = tns_render_string;
-  _tnetstring_ops.render_integer = tns_render_integer;
-  _tnetstring_ops.render_float = tns_render_float;
-  _tnetstring_ops.render_bool = tns_render_bool;
+  _tnetstring_ops_bytes.render_string = tns_render_string;
+  _tnetstring_ops_bytes.render_integer = tns_render_integer;
+  _tnetstring_ops_bytes.render_float = tns_render_float;
+  _tnetstring_ops_bytes.render_bool = tns_render_bool;
 
-  _tnetstring_ops.new_dict = tns_new_dict;
-  _tnetstring_ops.add_to_dict = tns_add_to_dict;
-  _tnetstring_ops.render_dict = tns_render_dict;
+  _tnetstring_ops_bytes.new_dict = tns_new_dict;
+  _tnetstring_ops_bytes.add_to_dict = tns_add_to_dict;
+  _tnetstring_ops_bytes.render_dict = tns_render_dict;
 
-  _tnetstring_ops.new_list = tns_new_list;
-  _tnetstring_ops.add_to_list = tns_add_to_list;
-  _tnetstring_ops.render_list = tns_render_list;
+  _tnetstring_ops_bytes.new_list = tns_new_list;
+  _tnetstring_ops_bytes.add_to_list = tns_add_to_list;
+  _tnetstring_ops_bytes.render_list = tns_render_list;
 }
 

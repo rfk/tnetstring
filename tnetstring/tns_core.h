@@ -15,7 +15,7 @@
 
 //  tnetstring rendering is done using an "outbuf" struct, which combines
 //  a malloced string with its allocation information.  Rendering is done
-//  from front to back; the details are deliberately hidden here since
+//  from back to front; the details are deliberately hidden here since
 //  I'm experimenting with multiple implementations and it might change.
 struct tns_outbuf_s;
 typedef struct tns_outbuf_s tns_outbuf;
@@ -36,6 +36,9 @@ typedef enum tns_type_tag_e {
 //  To convert between tnetstrings and the data structures of your application
 //  you provide the following struct filled with function pointers.  They
 //  will be called by the core parser/renderer as necessary.
+//
+//  Each callback is called with the containing struct as its first argument,
+//  to allow a primitive type of closure.
 
 struct tns_ops_s;
 typedef struct tns_ops_s tns_ops;
@@ -43,40 +46,40 @@ typedef struct tns_ops_s tns_ops;
 struct tns_ops_s {
 
   //  Get the type of a data object.
-  tns_type_tag (*get_type)(void *val);
+  tns_type_tag (*get_type)(const tns_ops *ops, void *val);
 
   //  Parse various types of object from a string.
-  void* (*parse_string)(const char *data, size_t len);
-  void* (*parse_integer)(const char *data, size_t len);
-  void* (*parse_float)(const char *data, size_t len);
+  void* (*parse_string)(const tns_ops *ops, const char *data, size_t len);
+  void* (*parse_integer)(const tns_ops *ops, const char *data, size_t len);
+  void* (*parse_float)(const tns_ops * ops, const char *data, size_t len);
 
   //  Constructors for constant primitive datatypes.
-  void* (*get_null)(void);
-  void* (*get_true)(void);
-  void* (*get_false)(void);
+  void* (*get_null)(const tns_ops *ops);
+  void* (*get_true)(const tns_ops *ops);
+  void* (*get_false)(const tns_ops *ops);
 
   //  Render various types of object into a tns_outbuf.
-  int (*render_string)(void *val, tns_outbuf *outbuf);
-  int (*render_integer)(void *val, tns_outbuf *outbuf);
-  int (*render_float)(void *val, tns_outbuf *outbuf);
-  int (*render_bool)(void *val, tns_outbuf *outbuf);
+  int (*render_string)(const tns_ops *ops, void *val, tns_outbuf *outbuf);
+  int (*render_integer)(const tns_ops *ops, void *val, tns_outbuf *outbuf);
+  int (*render_float)(const tns_ops *ops, void *val, tns_outbuf *outbuf);
+  int (*render_bool)(const tns_ops *ops, void *val, tns_outbuf *outbuf);
 
   //  Functions for building and rendering list values.
   //  Remember that rendering is done from back to front, so
   //  you must write the last list element first.
-  void* (*new_list)(void);
-  int (*add_to_list)(void* list, void* item);
+  void* (*new_list)(const tns_ops *ops);
+  int (*add_to_list)(const tns_ops *ops, void* list, void* item);
   int (*render_list)(const tns_ops *ops, void* list, tns_outbuf *outbuf);
 
   //  Functions for building and rendering dict values
   //  Remember that rendering is done from back to front, so
   //  you must write each value first, follow by its key.
-  void* (*new_dict)(void);
-  int (*add_to_dict)(void* dict, void* key, void* item);
+  void* (*new_dict)(const tns_ops *ops);
+  int (*add_to_dict)(const tns_ops *ops, void* dict, void* key, void* item);
   int (*render_dict)(const tns_ops *ops, void* dict, tns_outbuf *outbuf);
 
   //  Free values that are no longer in use
-  void (*free_value)(void *value);
+  void (*free_value)(const tns_ops *ops, void *value);
 
 };
 

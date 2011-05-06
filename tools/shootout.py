@@ -28,7 +28,7 @@ for (k,v) in FORMAT_EXAMPLES.iteritems():
 #  Use a fixed random seed for consistency.
 r = random.Random(7)
 for _ in xrange(20):
-    v = get_random_object(r,jsonsafe=True)
+    v = get_random_object(r)
     add_test(v)
 
 

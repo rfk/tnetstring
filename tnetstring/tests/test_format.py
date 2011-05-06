@@ -26,32 +26,30 @@ FORMAT_EXAMPLES = {
 }
 
 
-def get_random_object(random=random,depth=0,jsonsafe=False):
+def get_random_object(random=random,depth=0,unicode=False):
     """Generate a random serializable object."""
-    #  The probability of generating a scalar value
-    #  increases as the depth increases, to ensure we bottom out.
-    if random.randint(depth,10) <= 3:
+    #  The probability of generating a scalar value increases as the depth increase.
+    #  This ensures that we bottom out eventually.
+    if random.randint(depth,10) <= 4:
         what = random.randint(0,1)
         if what == 0:
             n = random.randint(0,10)
             l = []
             for _ in xrange(n):
-                l.append(get_random_object(random,depth+1,jsonsafe))
+                l.append(get_random_object(random,depth+1,unicode))
             return l
         if what == 1:
             n = random.randint(0,10)
             d = {}
             for _ in xrange(n):
-               #  JSON only supports string keys.
-               if jsonsafe:
-                   n = random.randint(0,100)
-                   k = "".join(chr(random.randint(32,126)) for _ in xrange(n))
-               else:
-                   k = get_random_object(random,10,jsonsafe)
-               d[k] = get_random_object(random,depth+1,jsonsafe)
+               n = random.randint(0,100)
+               k = "".join(chr(random.randint(32,126)) for _ in xrange(n))
+               if unicode:
+                   k = k.decode("ascii")
+               d[k] = get_random_object(random,depth+1,unicode)
             return d
     else:
-        what = random.randint(0,5)
+        what = random.randint(0,4)
         if what == 0:
             return None
         if what == 1:
@@ -63,15 +61,9 @@ def get_random_object(random=random,depth=0,jsonsafe=False):
                 return random.randint(0,sys.maxint)
             else:
                 return -1 * random.randint(0,sys.maxint)
-        #  cjson can't reliably round-trip floats.
-        if what == 4 and not jsonsafe:
-            return random.randint(0,sys.maxint)*1.0/random.randint(0,sys.maxint)
         n = random.randint(0,100)
-        #  cjson can't reliably round-trip non-printable bytes.
-        if jsonsafe:
-            return "".join(chr(random.randint(32,126)) for _ in xrange(n))
-        else:
-            return "".join(chr(random.randint(0,255)) for _ in xrange(n))
+        if unicode:
+            return u"".join(chr(random.randint(32,126)) for _ in xrange(n))
 
 
 
@@ -98,6 +90,12 @@ class Test_Format(unittest.TestCase):
         self.assertEquals(tnetstring.dumps(ALPHA,"utf8"),"6:"+ALPHA.encode("utf8")+",")
         self.assertEquals(tnetstring.dumps(ALPHA,"utf16"),"12:"+ALPHA.encode("utf16")+",")
         self.assertEquals(tnetstring.loads("12:\xff\xfe\x91\x03l\x00p\x00h\x00a\x00,","utf16"),ALPHA)
+
+    def test_roundtrip_format_unicode(self):
+        for _ in xrange(500):
+            v = get_random_object(unicode=True)
+            self.assertEqual(v,tnetstring.loads(tnetstring.dumps(v,"utf8"),"utf8"))
+            self.assertEqual((v,""),tnetstring.pop(tnetstring.dumps(v,"utf16"),"utf16"))
 
 
 class Test_FileLoading(unittest.TestCase):

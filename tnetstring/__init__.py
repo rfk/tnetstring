@@ -49,7 +49,7 @@ from collections import deque
 
 
 def dumps(value,encoding=None):
-    """dumps(object) -> string
+    """dumps(object,encoding=None) -> string
 
     This function dumps a python object as a tnetstring.
     """
@@ -65,7 +65,7 @@ def dumps(value,encoding=None):
 
 
 def dump(value,file,encoding=None):
-    """dump(object, file)
+    """dump(object,file,encoding=None)
 
     This function dumps a python object as a tnetstring and writes it to
     the given file.
@@ -132,7 +132,7 @@ def _rdumpq(q,size,value,encoding=None):
         write("]")
         init_size = size = size + 1
         for item in reversed(value):
-            size = _rdumpq(q,size,item)
+            size = _rdumpq(q,size,item,encoding)
         span = str(size - init_size)
         write(":")
         write(span)
@@ -141,8 +141,8 @@ def _rdumpq(q,size,value,encoding=None):
         write("}")
         init_size = size = size + 1
         for (k,v) in value.iteritems():
-            size = _rdumpq(q,size,v)
-            size = _rdumpq(q,size,k)
+            size = _rdumpq(q,size,v,encoding)
+            size = _rdumpq(q,size,k,encoding)
         span = str(size - init_size)
         write(":")
         write(span)
@@ -225,7 +225,7 @@ def _gdumps(value,encoding):
 
 
 def loads(string,encoding=None):
-    """loads(string) -> object
+    """loads(string,encoding=None) -> object
 
     This function parses a tnetstring into a python object.
     """
@@ -236,7 +236,7 @@ def loads(string,encoding=None):
 
 
 def load(file,encoding=None):
-    """load(file) -> object
+    """load(file,encoding=None) -> object
 
     This function reads a tnetstring from a file and parses it into a
     python object.  The file must support the read() method, and this
@@ -293,14 +293,14 @@ def load(file,encoding=None):
     if type == "]":
         l = []
         while data:
-            (item,data) = pop(data)
+            (item,data) = pop(data,encoding)
             l.append(item)
         return l
     if type == "}":
         d = {}
         while data:
-            (key,data) = pop(data)
-            (val,data) = pop(data)
+            (key,data) = pop(data,encoding)
+            (val,data) = pop(data,encoding)
             d[key] = val
         return d
     raise ValueError("unknown type tag")
@@ -308,7 +308,7 @@ def load(file,encoding=None):
 
 
 def pop(string,encoding=None):
-    """pop(string) -> (object, remain)
+    """pop(string,encoding=None) -> (object, remain)
 
     This function parses a tnetstring into a python object.
     It returns a tuple giving the parsed object and a string
@@ -355,14 +355,14 @@ def pop(string,encoding=None):
     if type == "]":
         l = []
         while data:
-            (item,data) = pop(data)
+            (item,data) = pop(data,encoding)
             l.append(item)
         return (l,remain)
     if type == "}":
         d = {}
         while data:
-            (key,data) = pop(data)
-            (val,data) = pop(data)
+            (key,data) = pop(data,encoding)
+            (val,data) = pop(data,encoding)
             d[key] = val
         return (d,remain)
     raise ValueError("unknown type tag")

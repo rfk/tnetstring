@@ -23,11 +23,26 @@ struct tns_outbuf_s {
   size_t alloc_size;
 };
 
+
+//  Helper function for parsing a dict; basically parses items in a loop.
 static int tns_parse_dict(const tns_ops *ops, void *dict, const char *data, size_t len);
+
+//  Helper function for parsing a list; basically parses items in a loop.
 static int tns_parse_list(const tns_ops *ops, void *list, const char *data, size_t len);
+
+//  Helper function for writing the length prefix onto a rendered value.
 static int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size);
+
+//  Finalize an outbuf, turning the allocated buffer into a standard
+//  char* array.  Can't use the outbuf once it has been finalized.
 static char* tns_outbuf_finalize(tns_outbuf *outbuf, size_t *len);
+
+//  Free the memory allocated in an outbuf.
+//  Can't use the outbuf once it has been freed.
 static void tns_outbuf_free(tns_outbuf *outbuf);
+
+//  Helper function to read a base-ten integer off a string.
+//  Due to additional constraints, we can do it faster than strtoi.
 static size_t tns_strtosz(const char *data, size_t len, size_t *sz, char **end);
 
 
@@ -77,26 +92,26 @@ void* tns_parse_payload(const tns_ops *ops,tns_type_tag type, const char *data, 
   switch(type) {
     //  Primitive type: a string blob.
     case tns_tag_string:
-        val = ops->parse_string(data, len);
+        val = ops->parse_string(ops, data, len);
         check(val != NULL, "Not a tnetstring: invalid string literal.");
         break;
     //  Primitive type: an integer.
     case tns_tag_integer:
-        val = ops->parse_integer(data, len);
+        val = ops->parse_integer(ops, data, len);
         check(val != NULL, "Not a tnetstring: invalid integer literal.");
         break;
     //  Primitive type: a float.
     case tns_tag_float:
-        val = ops->parse_float(data, len);
+        val = ops->parse_float(ops, data, len);
         check(val != NULL, "Not a tnetstring: invalid float literal.");
         break;
     //  Primitive type: a boolean.
     //  The only acceptable values are "true" and "false".
     case tns_tag_bool:
         if(len == 4 && STR_EQ_TRUE(data)) {
-            val = ops->get_true();
+            val = ops->get_true(ops);
         } else if(len == 5 && STR_EQ_FALSE(data)) {
-            val = ops->get_false();
+            val = ops->get_false(ops);
         } else {
             sentinel("Not a tnetstring: invalid boolean literal.");
             val = NULL;
@@ -105,20 +120,22 @@ void* tns_parse_payload(const tns_ops *ops,tns_type_tag type, const char *data, 
     //  Primitive type: a null.
     //  This must be a zero-length string.
     case tns_tag_null:
-        check(len == 0, "Not a tnetstring: invalid null literal");
-        val = ops->get_null();
+        check(len == 0, "Not a tnetstring: invalid null literal.");
+        val = ops->get_null(ops);
         break;
     //  Compound type: a dict.
     //  The data is written <key><value><key><value>
     case tns_tag_dict:
-        val = ops->new_dict();
+        val = ops->new_dict(ops);
+        check(val != NULL, "Could not create dict.");
         check(tns_parse_dict(ops, val, data, len) != -1,
               "Not a tnetstring: broken dict items.");
         break;
     //  Compound type: a list.
     //  The data is written <item><item><item>
     case tns_tag_list:
-        val = ops->new_list();
+        val = ops->new_list(ops);
+        check(val != NULL, "Could not create list.");
         check(tns_parse_list(ops, val, data, len) != -1,
               "Not a tnetstring: broken list items.");
         break;
@@ -130,7 +147,9 @@ void* tns_parse_payload(const tns_ops *ops,tns_type_tag type, const char *data, 
   return val;
 
 error:
-  ops->free_value(val);
+  if(val != NULL) {
+      ops->free_value(ops, val);
+  }
   return NULL;
 }
 
@@ -162,26 +181,25 @@ int tns_render_value(const tns_ops *ops, void *val, tns_outbuf *outbuf)
   assert(ops != NULL && "ops struct cannot be NULL");
 
   //  Find out the type tag for the given value.
-  type = ops->get_type(val);
+  type = ops->get_type(ops, val);
   check(type != 0, "type not serializable.");
 
   tns_outbuf_putc(outbuf, type);
   orig_size = tns_outbuf_size(outbuf);
 
-  //  Render it into the output buffer, leaving space for the
-  //  type tag at the end.
+  //  Render it into the output buffer using callbacks.
   switch(type) {
     case tns_tag_string:
-      res = ops->render_string(val, outbuf);
+      res = ops->render_string(ops, val, outbuf);
       break;
     case tns_tag_integer:
-      res = ops->render_integer(val, outbuf);
+      res = ops->render_integer(ops, val, outbuf);
       break;
     case tns_tag_float:
-      res = ops->render_float(val, outbuf);
+      res = ops->render_float(ops, val, outbuf);
       break;
     case tns_tag_bool:
-      res = ops->render_bool(val, outbuf);
+      res = ops->render_bool(ops, val, outbuf);
       break;
     case tns_tag_null:
       res = 0;
@@ -217,7 +235,7 @@ static int tns_parse_list(const tns_ops *ops, void *val, const char *data, size_
       check(item != NULL, "Failed to parse list.");
       len = len - (remain - data);
       data = remain;
-      check(ops->add_to_list(val, item) != -1,
+      check(ops->add_to_list(ops, val, item) != -1,
             "Failed to add item to list.");
       item = NULL;
   }
@@ -226,7 +244,7 @@ static int tns_parse_list(const tns_ops *ops, void *val, const char *data, size_
 
 error:
   if(item) {
-      ops->free_value(item);
+      ops->free_value(ops, item);
   }
   return -1;
 }
@@ -252,7 +270,7 @@ static int tns_parse_dict(const tns_ops *ops, void *val, const char *data, size_
       len = len - (remain - data);
       data = remain;
 
-      check(ops->add_to_dict(val, key, item) != -1,
+      check(ops->add_to_dict(ops, val, key, item) != -1,
             "Failed to add element to dict.");
 
       key = NULL;
@@ -263,10 +281,10 @@ static int tns_parse_dict(const tns_ops *ops, void *val, const char *data, size_
 
 error:
   if(key) {
-      ops->free_value(key);
+      ops->free_value(ops, key);
   }
   if(item) {
-      ops->free_value(item);
+      ops->free_value(ops, item);
   }
   return -1;
 }
@@ -307,7 +325,7 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
       return -1;
   }
 
-  //  Consume all other digits.
+  //  Consume the remaining digits, up to maximum value length.
   while(pos < eod) {
       c = *pos;
       if(c < '0' || c > '9') {
@@ -316,10 +334,14 @@ tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
           return 0; 
       }
       value = (value * 10) + (c - '0');
+      check(value <= TNS_MAX_LENGTH,
+            "Not a tnetstring: absurdly large length prefix");
       pos++;
   }
 
   // If we consume the entire string, that's an error.
+
+error:
   return -1;
 }
 
