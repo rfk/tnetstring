@@ -1,4 +1,14 @@
 
+v0.1.1:
+
+    * Easy loading of unicode strings.  If you pass an optional "encoding"
+      argument to load/loads/pop then it will return unicode string objects
+      rather than byte strings.
+    * Easy dumping of unicode strings.  If you pass an optional "encoding"
+      argument to dump/dumps then it will write unicode strings in that
+      encoding.
+
+
 v0.1.0:
 
     * Initial version; you might say *everything* has changed.
