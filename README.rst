@@ -36,3 +36,13 @@ at once, there's no efficiency gain from using the file-based versions of these
 functions.  They're only here so you can use load() to read precisely one
 item from a file or socket without consuming any extra data.
 
+By default tnetstrings work only with byte strings, not unicode.  If you want
+unicode strings then pass an optional encoding to the various functions, 
+like so::
+
+    >>> print repr(tnetstring.loads("2:\xce\xb1,"))
+    '\xce\xb1'
+    >>> 
+    >>> print repr(tnetstring.loads("2:\xce\xb1,","utf8"))
+    u'\u03b1'
+

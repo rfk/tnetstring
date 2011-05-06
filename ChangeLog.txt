@@ -1,5 +1,5 @@
 
-v0.1.1:
+v0.2.0:
 
     * Easy loading of unicode strings.  If you pass an optional "encoding"
       argument to load/loads/pop then it will return unicode string objects
