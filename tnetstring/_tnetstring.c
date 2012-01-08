@@ -16,7 +16,7 @@
 #include "tns_core.c"
 
 
-//  We have one static tns_ops struct far parsing bytestrings.
+//  We have one static tns_ops struct for parsing bytestrings.
 static tns_ops _tnetstring_ops_bytes;
 
 //  Unicode parsing ops are created on demand.
@@ -136,7 +136,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
   Py_INCREF(res);
   if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
       PyErr_SetString(PyExc_ValueError,
-                      "Not a tnetstring: invlaid or missing length prefix");
+                      "Not a tnetstring: invalid or missing length prefix");
       goto error;
   }
   c = PyString_AS_STRING(res)[0];
@@ -145,7 +145,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
   //  If the first char is zero, it must be the only char.
   if(c < '0' || c > '9') {
       PyErr_SetString(PyExc_ValueError,
-                      "Not a tnetstring: invlaid or missing length prefix");
+                      "Not a tnetstring: invalid or missing length prefix");
       goto error;
   } else if (c == '0') {
       res = PyObject_CallMethodObjArgs(file, methnm, metharg, NULL);
@@ -155,7 +155,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
       Py_INCREF(res);
       if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
           PyErr_SetString(PyExc_ValueError,
-                      "Not a tnetstring: invlaid or missing length prefix");
+                      "Not a tnetstring: invalid or missing length prefix");
           goto error;
       }
       c = PyString_AS_STRING(res)[0];
@@ -172,7 +172,7 @@ _tnetstring_load(PyObject* self, PyObject *args)
           Py_INCREF(res);
           if(!PyString_Check(res) || !PyString_GET_SIZE(res)) {
               PyErr_SetString(PyExc_ValueError,
-                        "Not a tnetstring: invlaid or missing length prefix");
+                        "Not a tnetstring: invalid or missing length prefix");
               goto error;
           }
           c = PyString_AS_STRING(res)[0];

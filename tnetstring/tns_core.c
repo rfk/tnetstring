@@ -227,7 +227,7 @@ static int tns_parse_list(const tns_ops *ops, void *val, const char *data, size_
   void *item = NULL;
   char *remain = NULL;
 
-  assert(value != NULL && "value cannot be NULL");
+  assert(val != NULL && "value cannot be NULL");
   assert(data != NULL && "data cannot be NULL");
 
   while(len > 0) {
