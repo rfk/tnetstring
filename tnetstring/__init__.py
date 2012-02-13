@@ -1,5 +1,4 @@
 """
-
 tnetstring:  data serialization using typed netstrings
 ======================================================
 
@@ -36,15 +35,16 @@ at once, there's no efficiency gain from using the file-based versions of these
 functions.  They're only here so you can use load() to read precisely one
 item from a file or socket without consuming any extra data.
 
-By default tnetstrings work only with byte strings, not unicode.  If you want
-unicode strings then pass an optional encoding to the various functions, 
-like so::
+The tnetstrings specification explicitly states that strings are binary blobs
+and forbids the use of unicode at the protocol level.  As a convenience to
+python programmers, this library lets you specify an application-level encoding
+to translate python's unicode strings to and from binary blobs:
 
     >>> print repr(tnetstring.loads("2:\\xce\\xb1,"))
     '\\xce\\xb1'
     >>> 
-    >>> print repr(tnetstring.loads("2:\\xce\\xb1,","utf8"))
-    u'\u03b1'
+    >>> print repr(tnetstring.loads("2:\\xce\\xb1,", "utf8"))
+    u'\\u03b1'
 
 """
 
@@ -389,5 +389,4 @@ else:
     load = _tnetstring.load
     loads = _tnetstring.loads
     pop = _tnetstring.pop
-
 
