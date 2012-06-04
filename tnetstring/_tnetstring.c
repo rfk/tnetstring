@@ -478,13 +478,39 @@ tns_parse_integer(const tns_ops *ops, const char *data, size_t len)
       }
       return PyLong_FromLongLong(ll * sign);
   }
-  //  Really big numbers must be parsed by python.
-  //  Technically this allows whitespace around the number, which
-  //  isn't valid in a tnetstring.  But I don't want to waste the
-  //  time checking and I am *not* reimplementing arbitrary-precision
-  //  strtod for python.
+  //  Really big numbers are passed to python's native parser.
   else { 
+      // PyLong_FromString allows leading whitespace, so we have to check
+      // that there is none present in the string.
+      c = *data;
+      switch(c) {
+        case '0':
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7':
+        case '8':
+        case '9':
+          break;
+        case '+':
+        case '-':
+          c = *(data+1);
+          check(c >= '0' && c <= '9', "invalid integer literal");
+          break;
+        default:
+          sentinel("invalid integer literal");
+      }
+      // PyLong_FromString insists that the string end in a NULL byte.
+      // I am *not* copying all that data.  Instead we lie a little bit
+      // about the const-ness of data, write a NULL over the format terminator
+      // and restore the original character when we're done.
+      c = data[len];
+      ((char*)data)[len] = '\0';
       v = PyLong_FromString((char *)data, &dataend, 10);
+      ((char*)data)[len] = c;
       check(dataend == data + len, "invalid integer literal");
       return v;
   }

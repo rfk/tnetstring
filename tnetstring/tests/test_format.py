@@ -2,6 +2,7 @@
 import sys
 import unittest
 import random
+import math
 import StringIO
 
 
@@ -97,6 +98,12 @@ class Test_Format(unittest.TestCase):
             self.assertEqual(v,tnetstring.loads(tnetstring.dumps(v,"utf8"),"utf8"))
             self.assertEqual((v,""),tnetstring.pop(tnetstring.dumps(v,"utf16"),"utf16"))
 
+    def test_roundtrip_big_integer(self):
+        i1 = math.factorial(30000)
+        s = tnetstring.dumps(i1)
+        i2 = tnetstring.loads(s)
+        self.assertEquals(i1, i2)
+
 
 class Test_FileLoading(unittest.TestCase):
 
@@ -131,4 +138,3 @@ class Test_FileLoading(unittest.TestCase):
         s.seek(0)
         self.assertRaises(ValueError,tnetstring.load,s)
         self.assertEquals(s.read(1),":")
-
