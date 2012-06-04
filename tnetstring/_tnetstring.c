@@ -248,6 +248,7 @@ _tnetstring_pop(PyObject* self, PyObject *args)
   PyObject *string = NULL;
   PyObject *val = NULL;
   PyObject *rest = NULL;
+  PyObject *result = NULL;
   PyObject *encoding = Py_None;
   tns_ops *ops = &_tnetstring_ops_bytes;
   char *data, *remain;
@@ -287,7 +288,14 @@ _tnetstring_pop(PyObject* self, PyObject *args)
   }
 
   rest = PyString_FromStringAndSize(remain, len-(remain-data));
-  return PyTuple_Pack(2, val, rest);
+  if(rest == NULL) {
+      result = NULL;
+  } else {
+      result = PyTuple_Pack(2, val, rest);
+      Py_DECREF(rest);
+  }
+  Py_DECREF(val);
+  return result;
 }
 
 
