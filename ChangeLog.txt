@@ -1,4 +1,10 @@
 
+v0.2.1:
+
+    * Fix memory leak in tnetstring.pop(); thanks tarvip.
+    * Fix bug in handling of large integers; thanks gdamjan.
+
+
 v0.2.0:
 
     * Easy loading of unicode strings.  If you pass an optional "encoding"
