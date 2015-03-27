@@ -364,7 +364,7 @@ static PyMethodDef _tnetstring_methods[] = {
      METH_VARARGS,
      PyDoc_STR("load(file,encoding=None) -> object\n"
                "This function reads a tnetstring from a file and parses it\n"
-               " into a python object.")},
+               "into a python object.")},
 
     {"loads",
      (PyCFunction)_tnetstring_loads,
