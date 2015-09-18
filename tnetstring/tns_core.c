@@ -291,7 +291,7 @@ error:
 
 
 
-static inline size_t
+static INLINE size_t
 tns_strtosz(const char *data, size_t len, size_t *sz, char **end)
 {
   char c;
@@ -351,7 +351,7 @@ size_t tns_outbuf_size(tns_outbuf *outbuf)
 }
 
 
-static inline int tns_outbuf_itoa(tns_outbuf *outbuf, size_t n)
+static INLINE int tns_outbuf_itoa(tns_outbuf *outbuf, size_t n)
 {
   do {
       check(tns_outbuf_putc(outbuf, n%10+'0') != -1,
@@ -382,7 +382,7 @@ error:
 }
 
 
-static inline void tns_outbuf_free(tns_outbuf *outbuf)
+static INLINE void tns_outbuf_free(tns_outbuf *outbuf)
 {
   if(outbuf) {
       free(outbuf->buffer);
@@ -393,7 +393,7 @@ static inline void tns_outbuf_free(tns_outbuf *outbuf)
 }
 
 
-static inline int tns_outbuf_extend(tns_outbuf *outbuf, size_t free_size)
+static INLINE int tns_outbuf_extend(tns_outbuf *outbuf, size_t free_size)
 {
   char *new_buf = NULL;
   char *new_head = NULL;
@@ -486,7 +486,7 @@ error:
 }
 
 
-static inline int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size)
+static INLINE int tns_outbuf_clamp(tns_outbuf *outbuf, size_t orig_size)
 {
     size_t datalen = tns_outbuf_size(outbuf) - orig_size;
 

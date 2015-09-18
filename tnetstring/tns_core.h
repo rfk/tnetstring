@@ -13,6 +13,13 @@
 #include <stddef.h>
 #include <ctype.h>
 
+#ifdef _MSC_VER
+  #define INLINE __forceinline /* use __forceinline (VC++ specific) */
+#else
+  #define INLINE inline        /* use standard inline */
+#endif
+
+
 //  tnetstring rendering is done using an "outbuf" struct, which combines
 //  a malloced string with its allocation information.  Rendering is done
 //  from back to front; the details are deliberately hidden here since
