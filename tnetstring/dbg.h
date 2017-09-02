@@ -1,7 +1,7 @@
 //
 //  dbg.h:  minimal checking and debugging functions
 //
-//  This is a small compatability shim for the Mongrel2 "dbg.h" interface,
+//  This is a small compatibility shim for the Mongrel2 "dbg.h" interface,
 //  to make it easier to port code back and forth between the tnetstring
 //  implementation in Mongrel2 and this module.
 //
